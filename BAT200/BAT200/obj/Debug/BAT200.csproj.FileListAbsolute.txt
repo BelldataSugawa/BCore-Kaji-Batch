@@ -1,0 +1,15 @@
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT200\BAT200\bin\Debug\BAT200.exe.config
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT200\BAT200\bin\Debug\BAT200.exe
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT200\BAT200\bin\Debug\BAT200.pdb
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT200\BAT200\obj\Debug\BAT200.csproj.AssemblyReference.cache
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT200\BAT200\obj\Debug\BAT200.csproj.CoreCompileInputs.cache
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT200\BAT200\obj\Debug\BAT200.exe
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT200\BAT200\obj\Debug\BAT200.pdb
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT200\BAT200\bin\Debug\BAT200.exe.config
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT200\BAT200\bin\Debug\BAT200.exe
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT200\BAT200\bin\Debug\BAT200.pdb
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT200\BAT200\obj\Debug\BAT200.csproj.AssemblyReference.cache
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT200\BAT200\obj\Debug\BAT200.exe.config
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT200\BAT200\obj\Debug\BAT200.csproj.CoreCompileInputs.cache
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT200\BAT200\obj\Debug\BAT200.exe
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT200\BAT200\obj\Debug\BAT200.pdb

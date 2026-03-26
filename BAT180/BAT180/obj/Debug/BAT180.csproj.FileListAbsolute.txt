@@ -1,0 +1,7 @@
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT180\BAT180\bin\Debug\BAT180.exe.config
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT180\BAT180\bin\Debug\BAT180.exe
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT180\BAT180\bin\Debug\BAT180.pdb
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT180\BAT180\obj\Debug\BAT180.csproj.AssemblyReference.cache
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT180\BAT180\obj\Debug\BAT180.csproj.CoreCompileInputs.cache
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT180\BAT180\obj\Debug\BAT180.exe
+C:\Users\makoto.sugawa.SUGAWA534\source\repos\BAT180\BAT180\obj\Debug\BAT180.pdb

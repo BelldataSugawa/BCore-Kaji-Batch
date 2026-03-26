@@ -1,0 +1,67 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\makoto.sugawa.SUGAWA534\\source\\repos\\BAT180\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{C3C4B834-CB88-469F-BDB3-43562E050F7C}|BAT180\\BAT180.csproj|c:\\users\\makoto.sugawa.sugawa534\\source\\repos\\bat180\\bat180\\bat180.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{C3C4B834-CB88-469F-BDB3-43562E050F7C}|BAT180\\BAT180.csproj|solutionrelative:bat180\\bat180.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{C3C4B834-CB88-469F-BDB3-43562E050F7C}|BAT180\\BAT180.csproj|C:\\Users\\makoto.sugawa.SUGAWA534\\source\\repos\\BAT180\\bat180\\app.config||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
+      "RelativeMoniker": "D:0:0:{C3C4B834-CB88-469F-BDB3-43562E050F7C}|BAT180\\BAT180.csproj|solutionrelative:bat180\\app.config||{FA3CD31E-987B-443A-9B81-186104E8DAC1}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{00000000-0000-0000-0000-000000000000}|\u003CSolution\u003E|BAT180||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 2,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "BAT180",
+              "DocumentMoniker": "C:\\Users\\makoto.sugawa.SUGAWA534\\source\\repos\\BAT180\\BAT180\\BAT180.csproj",
+              "RelativeDocumentMoniker": "BAT180\\BAT180.csproj",
+              "ToolTip": "C:\\Users\\makoto.sugawa.SUGAWA534\\source\\repos\\BAT180\\BAT180\\BAT180.csproj",
+              "RelativeToolTip": "BAT180\\BAT180.csproj",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-03-04T10:29:51.244Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "App.config",
+              "DocumentMoniker": "C:\\Users\\makoto.sugawa.SUGAWA534\\source\\repos\\BAT180\\BAT180\\App.config",
+              "RelativeDocumentMoniker": "BAT180\\App.config",
+              "ToolTip": "C:\\Users\\makoto.sugawa.SUGAWA534\\source\\repos\\BAT180\\BAT180\\App.config",
+              "RelativeToolTip": "BAT180\\App.config",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAACJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000601|",
+              "WhenOpened": "2026-03-04T08:44:38.738Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "BAT180.cs",
+              "DocumentMoniker": "C:\\Users\\makoto.sugawa.SUGAWA534\\source\\repos\\BAT180\\BAT180\\BAT180.cs",
+              "RelativeDocumentMoniker": "BAT180\\BAT180.cs",
+              "ToolTip": "C:\\Users\\makoto.sugawa.SUGAWA534\\source\\repos\\BAT180\\BAT180\\BAT180.cs",
+              "RelativeToolTip": "BAT180\\BAT180.cs",
+              "ViewState": "AgIAAEkCAAAAAAAAAAAYwIYCAAA5AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-03-04T08:44:27.804Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

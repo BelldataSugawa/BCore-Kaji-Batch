@@ -1,0 +1,8 @@
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT240\BAT240\bin\Debug\BAT240.exe.config
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT240\BAT240\bin\Debug\BAT240.exe
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT240\BAT240\bin\Debug\BAT240.pdb
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT240\BAT240\obj\Debug\BAT240.csproj.AssemblyReference.cache
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT240\BAT240\obj\Debug\BAT240.csproj.CoreCompileInputs.cache
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT240\BAT240\obj\Debug\BAT240.exe
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT240\BAT240\obj\Debug\BAT240.pdb
+C:\Users\yuuka.nakagawa\source\repos\practice\BAT240\BAT240\obj\Debug\BAT240.exe.config

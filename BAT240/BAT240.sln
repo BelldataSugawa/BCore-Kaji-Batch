@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36603.0 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BAT240", "BAT240\BAT240.csproj", "{822FD79B-B7E7-43C5-8736-1F66BE305410}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{822FD79B-B7E7-43C5-8736-1F66BE305410}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{822FD79B-B7E7-43C5-8736-1F66BE305410}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{822FD79B-B7E7-43C5-8736-1F66BE305410}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{822FD79B-B7E7-43C5-8736-1F66BE305410}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F11D2F82-F57A-41B3-BE43-69B9BD8184C5}
+	EndGlobalSection
+EndGlobal

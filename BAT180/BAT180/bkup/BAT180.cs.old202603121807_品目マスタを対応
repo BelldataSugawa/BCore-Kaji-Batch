@@ -1,0 +1,1660 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.Data.Odbc;
+using System.Data.SqlClient;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.Remoting.Messaging;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using static BAT180.BAT180;
+using static BAT180.BAT180.ItemMasterRepository;
+
+namespace BAT180
+{
+    internal class BAT180
+    {
+        static void Main(string[] args)
+        {
+            // *********************************************************************************
+            // * Mainルーチン
+            // *********************************************************************************
+            Console.WriteLine("プログラム開始しました。");
+
+            try
+            {
+                // *********************************************************************************
+                // * 変数定義
+                // *********************************************************************************
+
+                String registrationProgramId = "BAT180";
+                String registrationUserID = "BATCH";
+                // 現在日時を取得し、yyyyMMddHHmmss形式で保持
+                long integrationDateTime = Convert.ToInt64(DateTime.Now.ToString("yyyyMMddHHmmss"));
+
+                // CSVファイル名
+                string csvFileName_Item = null; // (品目)
+                string csvFileName_ItemStructure = null; // (品目構成)
+                string csvFileName_DesignChange = null; // (設計変更)
+
+                // 連携ステータスコメント
+                string integrationStatusComment_Success = null; // (正常終了時)
+                string integrationStatusComment_Error = null; // (エラー時)
+
+                // フォルダパス
+                string successFolderPath = null; // (正常終了用)
+                string errorFolderPath = null; // (エラー時用)
+                
+                // 連携エラー区分
+                bool integrationErrorType_Item = false; // (品目)
+                bool integrationErrorType_ItemStructure = false; // (品目構成)
+                bool integrationErrorType_DesignChange = false; // (設計変更)
+
+                // 連携ステータス
+                String IntegrationErrorSatus = null;　
+
+                // 連携元パス
+                string sourcePath_Item = null; // (品目)
+                string sourcePath_ItemStructure = null; // (品目構成)
+                string sourcePath_DesignChange = null; // (設計変更)
+
+                // 連携後フォルダパス（正常終了用）
+                string successFolderPath_After_Item = null; // (品目)
+                string successFolderPath_After_ItemStructure = null; // (品目構成)
+                string successFolderPath_After_DesignChange = null; // (設計変更)
+
+                // 連携後フォルダパス（エラー時用）
+                string errorFolderPath_After_Item = null; // (品目)
+                string errorFolderPath_After_ItemStructure = null; // (品目構成)
+                string errorFolderPath_After_DesignChange = null; // (設計変更)
+
+                // 連携元パス（\をバックスラッシュに置き換え）
+                string targetFolderItem = null; //品目
+                string targetFolderItemStructure = null; //品目
+                string targetFolderDesignChange = null; //品目
+
+                // 連携後フォルダパス（正常終了用）（\をバックスラッシュに置き換え）
+                string successTargetFolderItem = null; //品目
+                string successTargetFolderItemStructure = null; //品目
+                string successTargetFolderDesignChange = null; //品目
+
+                // 連携後フォルダパス（エラー時用）（\をバックスラッシュに置き換え）
+                string errorTargetFolderItem = null; //品目
+                string errorTargetFolderItemStructure = null; //品目
+                string errorTargetFolderDesignChange = null; //品目
+
+                // 連携後コメント
+                string afterIntegrationComment_Item = null; // (品目)
+                string afterIntegrationComment_ItemStructure = null; // (品目構成)
+                string afterIntegrationComment_DesignChange = null; // (設計変更)
+
+                // 不要パラメータ用
+                string unnecessary = null;
+
+                // ファイル名プリフィックス
+                string filePrefix_Item = "zubanmaster";
+                //
+                // *********************************************************************************
+                // * 引数のチェック
+                // *********************************************************************************
+                if (args.Length != 1)
+                {
+#if DEBUG
+                    Console.WriteLine("エラー: 依頼番号が指定されていません。");
+                    Console.WriteLine("戻り値:3");
+                    return;
+#else
+                    Environment.Exit(3); // 戻り値として「3」を返して終了
+#endif
+                }
+                string strIraiNo = args[0];
+                // 依頼番号の形式をバリデーション
+                string pattern = @"^\d{6}-\d{6}$"; // 正規表現パターン
+                if (!Regex.IsMatch(strIraiNo, pattern))
+                {
+#if DEBUG
+                    Console.WriteLine("エラー: 依頼番号は9999-9999形式である必要があります。");
+                    Console.WriteLine("戻り値:3");
+                    return;
+#else
+                    Environment.Exit(3); // 戻り値として「3」を返して終了
+#endif
+                }
+
+                // 依頼番号出力
+                Console.WriteLine($"処理対象の依頼No: {strIraiNo}");
+
+                // *********************************************************************************
+                // * データベース接続
+                // *********************************************************************************
+                string connectionString = ConfigurationManager.ConnectionStrings["IBM_i_ODBC_Connection"].ConnectionString;
+                using (OdbcConnection connection = new OdbcConnection(connectionString))
+                {
+
+                    connection.Open();
+                    Console.WriteLine("接続成功！");
+                    // *********************************************************************************
+                    // * 環境変数設定
+                    // *********************************************************************************
+                    string envMode = ConfigurationManager.AppSettings["EnvMode"];
+
+                    // SQLクエリを定義
+                    string query = "SELECT VLKUBN, TXMJT1, TXMJT2 FROM MKUBN WHERE CDKUBN = ? AND VLKUBN = ?";
+
+                    // 連携元パスの取得
+                    GetMKUBN(connection, query, envMode, "KBBRRN", "1", 
+                             out sourcePath_Item , out unnecessary);
+
+                    GetMKUBN(connection, query, envMode, "KBBRRN", "2", 
+                             out sourcePath_ItemStructure, out unnecessary);
+
+                    GetMKUBN(connection, query, envMode, "KBBRRN", "4", 
+                        out sourcePath_DesignChange, out unnecessary);
+
+                    // 正常終了用フォルダ、連携ステータスコメント（正常終了時）を取得
+
+                    GetMKUBN(connection, query, null, "STRENK", "1", 
+                        out integrationStatusComment_Success, out successFolderPath);
+
+                    // エラー終了用フォルダ、連携ステータスコメント（エラー終了時）を取得
+
+                    GetMKUBN(connection, query, null, "STRENK", "9",
+                        out integrationStatusComment_Error, out errorFolderPath);
+
+                    // *********************************************************************************
+                    // * フォルダのバックスラッシュ化
+                    // *********************************************************************************
+                    string fixedPath = sourcePath_Item
+                        .Replace('¥', '\\')   // 165 → 92
+                        .Replace('/', '\\');  // スラッシュも許容する場合
+                    targetFolderItem = Path.GetFullPath(fixedPath);
+
+                    fixedPath = sourcePath_ItemStructure
+                        .Replace('¥', '\\')   // 165 → 92
+                        .Replace('/', '\\');  // スラッシュも許容する場合
+                    targetFolderItemStructure = Path.GetFullPath(fixedPath);
+
+                    fixedPath = sourcePath_DesignChange
+                        .Replace('¥', '\\')   // 165 → 92
+                        .Replace('/', '\\');  // スラッシュも許容する場合
+                    targetFolderDesignChange = Path.GetFullPath(fixedPath);
+
+
+                    // 連携後フォルダパスの設定
+                    successFolderPath_After_Item = sourcePath_Item + successFolderPath;
+                    successFolderPath_After_ItemStructure = sourcePath_ItemStructure + successFolderPath;
+                    successFolderPath_After_DesignChange = sourcePath_DesignChange + successFolderPath;
+
+                    fixedPath = successFolderPath_After_Item
+                        .Replace('¥', '\\')   // 165 → 92
+                        .Replace('/', '\\');  // スラッシュも許容する場合
+                    successTargetFolderItem = Path.GetFullPath(fixedPath);
+
+                    fixedPath = successFolderPath_After_ItemStructure
+                        .Replace('¥', '\\')   // 165 → 92
+                        .Replace('/', '\\');  // スラッシュも許容する場合
+                    successTargetFolderItemStructure = Path.GetFullPath(fixedPath);
+
+                    fixedPath = successFolderPath_After_DesignChange
+                        .Replace('¥', '\\')   // 165 → 92
+                        .Replace('/', '\\');  // スラッシュも許容する場合
+                    successTargetFolderDesignChange = Path.GetFullPath(fixedPath);
+
+                    errorFolderPath_After_Item = sourcePath_Item + errorFolderPath;
+                    errorFolderPath_After_ItemStructure = sourcePath_ItemStructure + errorFolderPath;
+                    errorFolderPath_After_DesignChange = sourcePath_DesignChange + errorFolderPath;
+
+                    fixedPath = errorFolderPath_After_Item
+                        .Replace('¥', '\\')   // 165 → 92
+                        .Replace('/', '\\');  // スラッシュも許容する場合
+                    errorTargetFolderItem = Path.GetFullPath(fixedPath);
+
+                    fixedPath = errorFolderPath_After_ItemStructure
+                        .Replace('¥', '\\')   // 165 → 92
+                        .Replace('/', '\\');  // スラッシュも許容する場合
+                    errorTargetFolderItemStructure = Path.GetFullPath(fixedPath);
+
+                    fixedPath = errorFolderPath_After_DesignChange
+                        .Replace('¥', '\\')   // 165 → 92
+                        .Replace('/', '\\');  // スラッシュも許容する場合
+                    errorTargetFolderDesignChange = Path.GetFullPath(fixedPath);
+
+                    // デバッグ出力
+                    Console.WriteLine($"連携元パス (品目): {sourcePath_Item}");
+                    Console.WriteLine($"成功フォルダパス (品目): {successFolderPath_After_Item}");
+                    Console.WriteLine($"エラーフォルダパス (品目): {errorFolderPath_After_Item}");
+                    //
+                    Console.WriteLine($"連携元パス (品目構成): {sourcePath_ItemStructure}");
+                    Console.WriteLine($"成功フォルダパス (品目構成): {successFolderPath_After_ItemStructure}");
+                    Console.WriteLine($"エラーフォルダパス (品目構成): {errorFolderPath_After_ItemStructure}");
+                    //
+                    Console.WriteLine($"連携元パス (設計変更): {sourcePath_Item}");
+                    Console.WriteLine($"成功フォルダパス (設計変更): {successFolderPath_After_Item}");
+                    Console.WriteLine($"エラーフォルダパス (設計変更): {errorFolderPath_After_Item}");
+                    //
+                    Console.WriteLine($"正常終了時コメント: {integrationStatusComment_Success}");
+                    Console.WriteLine($"エラー終了時コメント: {integrationStatusComment_Error}");
+
+                    // *********************************************************************************
+                    // * バリデーションチェック
+                    // *********************************************************************************
+                    // *********************************************************************************
+                    // * 品目連携ファイルバリデーションチェック
+                    // *********************************************************************************
+                    var filesItem = Directory.GetFiles(targetFolderItem, "*.*", SearchOption.TopDirectoryOnly)
+                    .Where(f =>
+                               Path.GetFileName(f).Contains(filePrefix_Item) &&
+                               Path.GetFileName(f).Contains(strIraiNo));
+
+                    if (filesItem.Count() > 1  ) {
+                        // ファイルが存在しないもしくは複数ある場合の措置
+                        // 別途エラー処理を入れる。
+                        integrationErrorType_Item = true;
+                    }
+                    foreach (var file in filesItem)
+                    {
+                        // 存在するファイル分だけループ
+                        Console.WriteLine(file);
+                        bool isHeader = true;
+                        long rowCount = 0;
+                        foreach (var line in File.ReadLines(file))
+                        {
+                            rowCount++;
+                            if (isHeader)
+                            {
+                                isHeader = false;
+                            }
+                            else
+                            {
+                                // ファイルの行単位でループ
+                                // 1行を配列に分割
+                                var columns = line.Split(',');
+
+                                // バリデーション実行
+                                var errors = CsvValidator.Validate<ItemRecord>(columns);
+
+                                if (errors.Any())
+                                {
+                                    //
+                                    Console.WriteLine($"品目連携ファイルの{rowCount}行目でエラーがあります：");
+                                    errors.ForEach(e => Console.WriteLine("  - " + e));
+                                    //
+                                    afterIntegrationComment_Item += $"{rowCount}行目:";
+                                    errors.ForEach(e => afterIntegrationComment_Item += $"  - {e}" + integrationStatusComment_Success);
+                                    integrationErrorType_Item = true;
+                                }
+                                else
+                                {
+                                    //Console.WriteLine("OK: " + string.Join(", ", line));
+                                    Console.WriteLine("OK");
+                                }
+                            }
+                        }
+                    }
+                    // *********************************************************************************
+                    // * 品目連携ファイルバリデーションチェック終了
+                    // *********************************************************************************
+                    // *********************************************************************************
+                    // * バリデーションチェック終了
+                    // *********************************************************************************
+                    if (integrationErrorType_Item || integrationErrorType_ItemStructure || integrationErrorType_DesignChange)
+                    {
+                        Console.WriteLine("エラーが発生している為、データベースの更新は行われません");
+                    }
+                    else
+                    {
+                        // *********************************************************************************
+                        // * データベ－ス更新
+                        // *********************************************************************************
+                        using (var transaction = connection.BeginTransaction())
+                        {
+                            try
+                            {
+                                // *********************************************************************************
+                                // * 品目マスタ及び品目マスタ連携の更新処理
+                                // *********************************************************************************
+                                foreach (var file in filesItem)
+                                {
+                                    // 存在するファイル分だけループ
+                                    Console.WriteLine(file);
+                                    bool isHeader = true;
+                                    long rowCount = 0;
+                                    foreach (var line in File.ReadLines(file))
+                                    {
+                                        rowCount++;
+                                        if (isHeader)
+                                        {
+                                            isHeader = false;
+                                        }
+                                        else
+                                        {
+                                            // ファイルの行単位でループ
+                                            // 1行を配列に分割
+                                            var columns = line.Split(',');
+                                            // 品目連携ファイルをオブジェクト「ItemRecord」に設定
+                                            var itemRecord = new ItemRecord
+                                            {
+                                                ItemDocumentNumber = columns[0], // 図番/購入仕様書番号
+                                                RevisionNumber = int.Parse(columns[1]), // 改訂番号
+                                                ItemCode = columns[2], // 品目コード
+                                                ItemName = columns[3], // 品目名
+                                                ItemEnglishName = columns[4], // 品目英名
+                                                UnusableFlag = columns[5], // 使用不可区分
+                                                NewItemNumber = columns.Length > 6 ? columns[6] : null, // 変更後品番 (Nullable)
+                                                ClassName = columns.Length > 7 ? columns[7] : null, // クラス名 (Nullable)
+                                                ItemLinkageFlag = columns.Length > 8 ? columns[8] : null, // 品番連携区分 (Nullable)
+                                                AssemblyFlag = columns.Length > 9 ? columns[9] : null, // 組立区分 (Nullable)
+                                                VarietyCode = columns.Length > 10 ? columns[10] : null, // 品種コード (Nullable)
+                                                MaterialCode = columns.Length > 11 ? columns[11] : null, // 材質コード (Nullable)
+                                                Remarks = columns.Length > 12 ? columns[12] : null // 備考 (Nullable)
+                                            };
+                                            // 品目マスタのエンティティクラスを実体化
+                                            var itemMasterRepository = new ItemMasterRepository(connection,transaction);
+                                            // 品目マスタのデータ取得
+                                            string itemCode = itemRecord.ItemCode;  // 品目コードを取得キー設定
+                                            ItemMaster item = itemMasterRepository.GetItemById(itemCode);
+                                            if (item != null)
+                                            {
+                                                // 品目マスタが存在した場合更新処理を行う
+                                                Console.WriteLine($"品目コード:[itemRecord.ItemCode]を更新します");
+                                                //
+                                                item.FGDELE = "0";                          // 削除フラグ
+                                                item.SPUUSR = registrationUserID;           // 更新担当者コード
+                                                item.SPUDTM = Convert.ToInt32(integrationDateTime); 
+                                                                                            // 更新日時
+                                                item.SPUPGM = registrationProgramId;        // 更新プログラムID
+                                                //item.CDHINM = itemRecord.ItemCode;        // 品目コード
+                                                item.NMHINM = itemRecord.ItemName;          // 品目名 
+                                                item.ENHINM = itemRecord.ItemEnglishName;   // 品目英名
+                                                item.CDHINS = itemRecord.VarietyCode;       // 品種コード
+                                                item.NMHISJ = itemRecord.ItemName;          // 品種名に品目名をセット
+                                                item.NMHISE = itemRecord.ItemEnglishName;   // 品種英名に品目英名をセット
+                                                item.KBKMTT = itemRecord.AssemblyFlag;      // 組立区分
+                                                item.NOREVS = itemRecord.RevisionNumber;    // 改訂番号
+                                                switch (itemRecord.ItemLinkageFlag)         // 使用不可区分
+                                                {
+                                                    case "3":
+                                                        item.KBSING = "1";
+                                                        break;
+                                                    case "4":
+                                                        item.KBSING = "0";
+                                                        break;
+                                                    default:
+                                                        item.KBSING = itemRecord.UnusableFlag;    
+                                                        break;
+                                                }
+                                                item.VLZUBN = itemRecord.ItemDocumentNumber;    // 図番/購入仕様書番号
+                                                item.NMBCLS = itemRecord.ClassName;             // Base-Rightクラス名
+                                                item.CDHHIN = itemRecord.NewItemNumber;        // 変更後品目コード
+                                                item.TXBRTX = itemRecord.Remarks;               // BR特記事項
+                                                item.KBHREN = itemRecord.ItemLinkageFlag;       // 品番連携区分
+                                                item.CDZAIS1 = itemRecord.MaterialCode;         // 材質コード1
+                                                itemMasterRepository.UpdateItem(item);
+                                                // 他のフィールドを表示
+                                            }
+                                            else
+                                            {
+                                                Console.WriteLine($"品目コード:[itemRecord.ItemCode]を追加します");
+                                                //
+                                                ItemMaster item2 = new ItemMaster();
+                                                item2.FGDELE = "0";                          // 削除フラグ
+                                                item2.SPIUSR = registrationUserID;           // 登録担当者コード
+                                                item2.SPIDTM = Convert.ToInt32(integrationDateTime);
+                                                                                             // 登録日時
+                                                item2.SPIPGM = registrationProgramId;        // 登録プログラムID
+                                                item2.SPUUSR = registrationUserID;           // 更新担当者コード
+                                                item2.SPUDTM = Convert.ToInt32(integrationDateTime);
+                                                                                             // 更新日時
+                                                item2.SPUPGM = registrationProgramId;        // 更新プログラムID
+                                                //
+                                                item2.CDHINM = itemRecord.ItemCode;          // 品目コード
+                                                item2.NMHINM = itemRecord.ItemName;          // 品目名 
+                                                item2.ENHINM = itemRecord.ItemEnglishName;   // 品目英名
+                                                item2.CDHINS = itemRecord.VarietyCode;       // 品種コード
+                                                item.NMHISJ = itemRecord.ItemName;           // 品種名に品目名をセット
+                                                item.NMHISE = itemRecord.ItemEnglishName;    // 品種英名に品目英名をセット
+                                                item2.KBKMTT = itemRecord.AssemblyFlag;      // 組立区分
+                                                item2.NOREVS = itemRecord.RevisionNumber;    // 改訂番号
+                                                switch (itemRecord.ItemLinkageFlag)          // 使用不可区分
+                                                {
+                                                    case "3":
+                                                        item2.KBSING = "1";
+                                                        break;
+                                                    case "4":
+                                                        item2.KBSING = "0";
+                                                        break;
+                                                    default:
+                                                        item2.KBSING = itemRecord.UnusableFlag;
+                                                        break;
+                                                }
+                                                item2.VLZUBN = itemRecord.ItemDocumentNumber;    // 図番/購入仕様書番号
+                                                item2.NMBCLS = itemRecord.ClassName;             // Base-Rightクラス名
+                                                item2.CDHHIN = itemRecord.NewItemNumber;         // 変更後品目コード
+                                                item2.TXBRTX = itemRecord.Remarks;               // BR特記事項
+                                                item2.KBHREN = itemRecord.ItemLinkageFlag;       // 品番連携区分
+                                                item2.CDZAIS1 = itemRecord.MaterialCode;         // 材質コード1
+                                                item2.KBTEHI = "999";                            // 手配区分
+                                                itemMasterRepository.InsertItem(item2);
+                                                // 他のフィールドを表示
+                                            }
+                                        }
+                                    }
+                                }
+                                transaction.Commit();
+                            }
+                            catch (Exception ex)
+                            {
+                                // エラーが発生した場合ロールバック
+                                transaction.Rollback();
+                                // エラー状態を設定
+                                integrationErrorType_Item = true;
+                            }
+                            // *********************************************************************************
+                            // * コミット実施（品目・品目構成・設計変更が全てOKのときのみ
+                            // *********************************************************************************
+                        }
+                        // *********************************************************************************
+                        // * データベ－ス更新終了
+                        // *********************************************************************************
+                    }
+                    // *********************************************************************************
+                    // * バリデーションチェック正常時の処理終了
+                    // *********************************************************************************
+                    // *********************************************************************************
+                    // * BaseRight連携履歴追加処理
+                    // *********************************************************************************
+                    if (integrationErrorType_Item || integrationErrorType_ItemStructure || integrationErrorType_DesignChange)
+                    {
+                        IntegrationErrorSatus = "9"; // エラー
+                    }
+                    else
+                    {
+                        IntegrationErrorSatus = "1"; //正常
+                    }
+                    // *********************************************************************************
+                    // * BaseRight連携履歴（品目）
+                    // *********************************************************************************
+                    foreach (var file in filesItem)
+                    {
+                        // 存在するファイル分だけループ
+                        Console.WriteLine(file);
+                        var BRNo = IdNumbering.UpdateCMSABNV99(registrationUserID, integrationDateTime, registrationProgramId, connection);
+                        BaseRightHistoryHeader header = new BaseRightHistoryHeader
+                        {
+                            DeleteFlag = 0,                                                 // 削除フラグ
+                            RegisteredUserCode = registrationUserID,                        // 登録担当者コード
+                            RegisteredDateTime = Convert.ToInt64(integrationDateTime),      // 登録日時
+                            RegisteredProgramID = registrationProgramId,                    // 登録プログラムID
+                            UpdatedUserCode = registrationUserID,                           // 更新担当者コード
+                            UpdatedDateTime = Convert.ToInt64(integrationDateTime),         // 更新日時
+                            UpdatedProgramID = registrationProgramId,                       // 更新プログラムID
+                            BaseRightNo = BRNo.ToString("D10"),                             // BR連携No
+                            BaseRightCategory = "1",                                        // 1:品目
+                            LinkedDate = Convert.ToInt64(integrationDateTime),
+                            Sequence = 1,
+                            Status = integrationErrorType_Item is true
+                                        ? "9"
+                                        : "1",
+                            Comment = afterIntegrationComment_Item != null
+                                      ? GetTrimmedString(afterIntegrationComment_Item, Math.Min(afterIntegrationComment_Item.Length, 256))
+                                      : string.Empty, 
+                            SourceFilePath = sourcePath_Item != null
+                                      ? GetTrimmedString(sourcePath_Item, Math.Min(sourcePath_Item.Length, 256))
+                                      : string.Empty,
+                            DestinationFilePath = successFolderPath_After_Item != null
+                                      ? GetTrimmedString(successFolderPath_After_Item, Math.Min(successFolderPath_After_Item.Length, 256))
+                                      : string.Empty,
+                        };
+                        bool isHeader = true;
+                        long rowCount = 0;
+                        foreach (var line in File.ReadLines(file))
+                        {
+                            rowCount++;
+                            if (isHeader)
+                            {
+                                isHeader = false;
+                            }
+                            else
+                            {
+                                // ファイルの行単位でループ
+                                // 1行を配列に分割
+                                var columns = line.Split(',');
+                                header.Details.Add(new BaseRightHistoryDetail
+                                {
+                                    DeleteFlag = 0,                                                 // 削除フラグ
+                                    RegisteredUserCode = registrationUserID,                        // 登録担当者コード
+                                    RegisteredDateTime = Convert.ToInt64(integrationDateTime),      // 登録日時
+                                    RegisteredProgramID = registrationProgramId,                    // 登録プログラムID
+                                    UpdatedUserCode = registrationUserID,                           // 更新担当者コード
+                                    UpdatedDateTime = Convert.ToInt64(integrationDateTime),         // 更新日時
+                                    UpdatedProgramID = registrationProgramId,                       // 更新プログラムID
+                                    BaseRightNo = BRNo.ToString("D10"),                             // BR連携No
+                                    ItemLineNo = Convert.ToInt32(rowCount),                         // BR連携品目行No
+                                    DesignNo = columns.Length > 0 && columns[0] != null
+                                      ? columns[0].Substring(0, Math.Min(columns[0].Length, 13))
+                                      : string.Empty,                                               // 図番/購入仕様書番号
+                                    ChangeSymbol = columns.Length > 1 && columns[1] != null
+                                      ? columns[1].Substring(0, Math.Min(columns[1].Length, 3))
+                                      : string.Empty,                                               // 改訂番号
+                                    ItemNo = columns.Length > 2 && columns[2] != null
+                                      ? columns[2].Substring(0, Math.Min(columns[2].Length, 20))
+                                      : string.Empty,                                               // 品目コード
+                                    StandardName_JP = columns.Length > 3 && columns[3] != null
+                                      ? columns[3].Substring(0, Math.Min(columns[3].Length, 1024)) 
+                                      : string.Empty,                                               // 品目名
+                                    StandardName_EN = columns.Length > 4 && columns[4] != null
+                                      ? columns[4].Substring(0, Math.Min(columns[4].Length, 128))
+                                      : string.Empty,                                               // 品目英名
+                                    UsageForbiddenCategory = columns.Length > 5 && columns[5] != null
+                                      ? columns[5].Substring(0, Math.Min(columns[5].Length, 1))
+                                      : string.Empty,                                               // 使用不可区分
+                                    ChangedItemNo = columns.Length > 6 && columns[6] != null
+                                      ? columns[6].Substring(0, Math.Min(columns[6].Length, 20))
+                                      : string.Empty,                                               // 変更後品番
+                                    ClassName = columns.Length > 7 && columns[7] != null
+                                      ? columns[7].Substring(0, Math.Min(columns[7].Length, 30))
+                                      : string.Empty,                                               // クラス名
+                                    ItemLinkCategory = columns.Length > 8 && columns[8] != null
+                                      ? columns[8].Substring(0, Math.Min(columns[8].Length, 1))
+                                      : string.Empty,                                               // 品番連携区分
+                                    AssemblyCategory = columns.Length > 9 && columns[9] != null
+                                      ? columns[9].Substring(0, Math.Min(columns[9].Length, 10))
+                                      : string.Empty,                                               // 組立区分
+                                    SpeciesCode = columns.Length > 10 && columns[10] != null
+                                      ? columns[10].Substring(0, Math.Min(columns[10].Length, 1024))
+                                      : string.Empty,                                               // 品種コード
+                                    MaterialCode = columns.Length > 11 && columns[11] != null
+                                      ? columns[11].Substring(0, Math.Min(columns[11].Length, 8))
+                                      : string.Empty,                                               // 材質コード
+                                    Remarks = columns.Length > 12 && columns[12] != null
+                                      ? columns[12].Substring(0, Math.Min(columns[12].Length, 200))
+                                      : string.Empty                                                // 備考
+                                });
+                            }
+                        }
+                        //
+                        header.Insert(connection);
+                    }
+                    // *********************************************************************************
+                    // * BaseRight連携履歴（品目）終了
+                    // *********************************************************************************
+                    // *********************************************************************************
+                    // * BaseRight連携履歴追加処理終了
+                    // *********************************************************************************
+                    // *********************************************************************************
+                    // * ファイル移送処理
+                    // *********************************************************************************
+                    foreach (var file in filesItem)
+                    {
+                        try
+                        {
+                            // ファイル名を移動先フォルダのパスに設定
+                            string fileName = Path.GetFileName(file);
+                            string destinationPath = null;
+                            if (integrationErrorType_Item)
+                            {
+                                destinationPath = Path.Combine(errorTargetFolderItem, fileName);
+                            }
+                            else
+                            {
+                                destinationPath = Path.Combine(successTargetFolderItem, fileName);
+                            }
+
+                            // 移動先に同名のファイルが存在する場合の処理
+                            if (File.Exists(destinationPath))
+                            {
+                                // 上書きするために既存のファイルを削除
+                                File.Delete(destinationPath);
+                            }
+
+                            // ファイルを移動
+                            File.Move(file, destinationPath);
+                            Console.WriteLine($"ファイルを移動しました: {fileName}");
+                        }
+                        catch (Exception ex)
+                        {
+                            // エラーハンドリング
+                            Console.WriteLine($"ファイルの移動に失敗しました: {Path.GetFileName(file)} - {ex.Message}");
+                            integrationErrorType_Item = true;
+                        }
+                    }
+                }
+                // *********************************************************************************
+                // * データベース接続終了
+                // *********************************************************************************
+            }
+            catch (OdbcException ex)
+            {
+                Console.WriteLine("接続エラー: " + ex.Message);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("エラーしました:" + ex.Message + " ");
+            }
+            finally
+            {
+
+                Console.WriteLine("プログラムが終了しました。");
+#if DEBUG
+                    Console.WriteLine("画面を閉じるにはEnterを押下してください。");
+                    string RTN = Console.ReadLine();
+#endif
+            }
+        }
+        // Main終了
+        // 以下サブモジュール／クラス
+
+        static void GetMKUBN(OdbcConnection connection, string query, string envMode, string code, string value,
+                    out string CodeDescription1 ,  out string CodeDescription2 )
+        {
+            // *********************************************************************************
+            // * 汎用区分マスタから区分値を取得する
+            // *********************************************************************************
+            using (OdbcCommand command = new OdbcCommand(query, connection))
+            {
+                command.Parameters.AddWithValue("区分識別コード", code);
+                command.Parameters.AddWithValue("区分値", value);
+                CodeDescription1 = null;
+                CodeDescription2 = null;
+                using (OdbcDataReader reader = command.ExecuteReader())
+                {
+                    if (reader.Read())
+                    {
+                        switch (envMode)
+                        {
+                            case "PRODUCTION":
+                                CodeDescription1 = reader.GetString(1); // 文字値
+                                CodeDescription2 = null;
+                                break;
+                            case "DEVELOPMENT":
+                                CodeDescription1 = reader.GetString(2); // 文字値
+                                CodeDescription2 = null;
+                                break;
+                            default:
+                                CodeDescription1 = reader.GetString(1); // 文字値
+                                CodeDescription2 = reader.GetString(2); // 文字値
+                                break;
+                        }
+                    }
+                }
+            }
+        }
+
+        [AttributeUsage(AttributeTargets.Property)]
+        public class CsvFieldAttribute : Attribute
+        {
+            // *********************************************************************************
+            // * バリデーション属性クラス
+            // *********************************************************************************
+            public bool Required { get; set; }
+            public int Length { get; set; }
+            public Type DataType { get; set; }
+
+            public CsvFieldAttribute(bool required, int length, Type dataType)
+            {
+                Required = required;
+                Length = length;
+                DataType = dataType;
+            }
+        }
+
+        //
+        public class ItemRecord
+        {
+            // *********************************************************************************
+            // * 品目仕様書データクラス
+            // *********************************************************************************
+            [CsvField(required: true, length: 30, dataType: typeof(string))] //図番/購入仕様書番号
+            public string ItemDocumentNumber { get; set; }
+
+            [CsvField(required: true, length: 3, dataType: typeof(decimal))] //改訂番号
+            public int RevisionNumber { get; set; }
+
+            [CsvField(required: true, length: 25, dataType: typeof(string))] //品目コード
+            public string ItemCode { get; set; }
+
+            [CsvField(required: true, length: 62, dataType: typeof(string))] //品目名
+            public string ItemName { get; set; }
+
+            [CsvField(required: true, length: 62, dataType: typeof(string))] //品目英名
+            public string ItemEnglishName { get; set; }
+
+            [CsvField(required: true, length: 1, dataType: typeof(string))] //使用不可区分
+            public string UnusableFlag { get; set; }
+
+            [CsvField(required: false, length: 25, dataType: typeof(string))] //変更後品番
+            public string NewItemNumber { get; set; }
+
+            [CsvField(required: false, length: 32, dataType: typeof(string))] //クラス名
+            public string ClassName { get; set; }
+
+            [CsvField(required: false, length: 1, dataType: typeof(string))] //品番連携区分
+            public string ItemLinkageFlag { get; set; }
+
+            [CsvField(required: false, length: 10, dataType: typeof(string))] //組立区分
+            public string AssemblyFlag { get; set; }
+
+            [CsvField(required: false, length: 20, dataType: typeof(string))] //品種コード
+            public string VarietyCode { get; set; }
+
+            [CsvField(required: false, length: 8, dataType: typeof(string))] //材質コード
+            public string MaterialCode { get; set; }
+
+            [CsvField(required: false, length: 258, dataType: typeof(string))] //備考
+            public string Remarks { get; set; }
+        }
+
+        public static class CsvValidator
+        {
+            // *********************************************************************************
+            // * 属性を使ったバリデーション処理
+            // *********************************************************************************
+            public static List<string> Validate<T>(string[] values)
+            {
+                var errors = new List<string>();
+                var props = typeof(T).GetProperties();
+
+                for (int i = 0; i < props.Length; i++)
+                {
+                    var prop = props[i];
+                    var attr = prop.GetCustomAttribute<CsvFieldAttribute>();
+                    var value = values.Length > i ? values[i] : "";
+
+                    if (attr == null)
+                        continue;
+
+                    // 必須チェック
+                    if (attr.Required && string.IsNullOrWhiteSpace(value))
+                    {
+                        errors.Add($"{prop.Name}: 必須項目です");
+                        continue;
+                    }
+
+                    // 空なら以降のチェック不要
+                    if (string.IsNullOrWhiteSpace(value))
+                        continue;
+
+                    // 桁数チェック
+                    if (value.Length > attr.Length)
+                    {
+                        errors.Add($"{prop.Name}: 桁数オーバー（最大 {attr.Length} 桁）");
+                    }
+
+                    // 型チェック
+                    if (attr.DataType == typeof(long) && !long.TryParse(value, out _))
+                    {
+                        errors.Add($"{prop.Name}: 数値ではありません");
+                    }
+                }
+                return errors;
+            }
+        }
+
+        public class ItemMasterRepository
+        {
+            // *********************************************************************************
+            // * 品目マスタのエンティティクラス
+            // *********************************************************************************
+            private OdbcConnection _connection;
+            private OdbcTransaction transaction;
+
+            // コンストラクタ
+            public ItemMasterRepository(OdbcConnection connection, OdbcTransaction transaction)
+            {
+                _connection = connection;
+                this.transaction = transaction;
+            }
+
+            // ItemMasterクラスを定義
+            public class ItemMaster
+            {
+                public string FGDELE { get; set; }					//削除フラグ
+                public string SPIUSR { get; set; }                  //登録担当者コード
+                public int SPIDTM { get; set; }                     //登録日時
+                public string SPIPGM { get; set; }                  //登録プログラムID
+                public string SPUUSR { get; set; }                  //更新担当者コード
+                public int SPUDTM { get; set; }                     //更新日時
+                public string SPUPGM { get; set; }                  //更新プログラムID
+                public string CDHINM { get; set; }                  //品目コード
+                public string NMHINM { get; set; }                  //品目名
+                public string NRHINM { get; set; }                  //品目名略称
+                public string NKHINM { get; set; }                  //品目カナ名
+                public string ENHINM { get; set; }                  //品目英名
+                public string ERHINM { get; set; }                  //品目英名略称
+                public string CDHINS { get; set; }                  //品種コード
+                public string NMHISJ { get; set; }                  //品種名称和文
+                public string NMHISE { get; set; }                  //品種名称英文
+                public string CDTANI { get; set; }                  //単位コード
+                public string KBUISI { get; set; }                  //売上仕入使用区分
+                public string KBCGHN { get; set; }                  //品目名称変更区分
+                public string KBYOTO { get; set; }                  //用途区分
+                public string KBKMTT { get; set; }                  //組立区分
+                public string KBHNTY { get; set; }                  //品目タイプ区分
+                public string CDHINB { get; set; }                  //品目分類コード
+                public string CDHNGP { get; set; }                  //品目グループコード
+                public int NOREVS { get; set; }                     //改訂番号
+                public string KBSING { get; set; }                  //使用不可区分
+                public string VLZUBN { get; set; }                  //図番/購入仕様書
+                public string CDHHIN { get; set; }                  //変更後品目コード
+                public string NMBCLS { get; set; }                  //Base-Rightクラス
+                public string TXZUMN { get; set; }                  //図面番号特記事項
+                public string TXBRTX { get; set; }                  //BR特記事項
+                public string KBHREN { get; set; }                  //品番連携区分
+                public string NOSOZU { get; set; }                  //素材図
+                public string NOKIKN { get; set; }                  //木型・金型
+                public string TXZAIS { get; set; }                  //材質
+                public string CDZAIS1 { get; set; }                 //材質コード1
+                public string CDZAIS2 { get; set; }                 //材質コード2
+                public string CDZAIS3 { get; set; }                 //材質コード3
+                public string CDZAIR { get; set; }                  //材料品目コード
+                public string CDGKAS { get; set; }                  //外注加工先
+                public string NOTANA { get; set; }                  //棚番
+                public string CDKISH { get; set; }                  //代表型式コード
+                public string KBZAIR { get; set; }                  //材料区分
+                public string KBZAIK { get; set; }                  //在庫区分
+                public string KBLTKR { get; set; }                  //ロット管理区分
+                public string KBSESK { get; set; }                  //成績書扱い区分
+                public string FGMILL { get; set; }                  //ミルシート要否
+                public string FGKYOD { get; set; }                  //強度計算書有無
+                public string FGKENT { get; set; }                  //検定要否
+                public string FGSIJI { get; set; }                  //指示書要否
+                public string FGZUMN { get; set; }                  //図面要否
+                public string FGSHIY { get; set; }                  //仕様書要否
+                public string FGNETU { get; set; }                  //熱処理記録要否
+                public string FGSUNK { get; set; }                  //寸法確認書要否
+                public string FGSETU { get; set; }                  //取扱説明書要否
+                public string FGKHKG { get; set; }                  //KHK合格書要否
+                public string FGKGSY { get; set; }                  //高圧ガス認定書要否
+                public string FGPKAN { get; set; }                  //プロセス管理区分
+                public string FGZKEN { get; set; }                  //材料検査有無
+                public string FGTANS { get; set; }                  //単体出荷可否
+                public string FGZTOS { get; set; }                  //材料時塗装要否
+                public string FGZASK { get; set; }                  //材料支給要否
+                public string FGTJIG { get; set; }                  //耐圧治具有無
+                public string KBCYLI { get; set; }                  //新旧シリンダ区分
+                public string KBGKAK { get; set; }                  //加工区分
+                public string KBTEHI { get; set; }                  //手配区分
+                public string KBNYTS { get; set; }                  //入荷管理対象区分
+                public string KBNYKN { get; set; }                  //入荷検査要否区分
+                public string KBKNSA { get; set; }                  //検査区分
+                public decimal QTLOTS { get; set; }                 //ロット数量
+                public decimal QTHCSU { get; set; }                 //最小発注数量
+                public decimal QTIMOJ { get; set; }                 //鋳物単重
+                public decimal PRIMOT { get; set; }                 //鋳物原価
+                public string VLBSUN { get; set; }                  //部品寸法LWH(mm)
+                public string TXBSUN { get; set; }                  //部品寸法特記事項
+                public decimal VLSUN1 { get; set; }                 //寸法1
+                public decimal VLSUN2 { get; set; }                 //寸法2
+                public decimal VLSUN3 { get; set; }                 //寸法3
+                public int QTLDTM { get; set; }                     //品目LT
+                public string TXLTTM { get; set; }                  //品目LT特記事項
+                public decimal QTBUHJ { get; set; }                 //部品単体重量(kg)
+                public string TXBUHJ { get; set; }                  //部品単体重量特記事
+                public decimal QTTNJU { get; set; }                 //単重
+                public string CDDFSH { get; set; }                  //標準仕入先コード
+                public string CDMEKA { get; set; }                  //メーカーコード
+                public string CDDAIR { get; set; }                  //標準代理店コード
+                public string TXMKAT { get; set; }                  //メーカー型番
+                public string TXMEKA { get; set; }                  //メーカー特記事項
+                public string TXBUHN { get; set; }                  //部品詳細内容
+                public string TXB512 { get; set; }                  //特記事項
+                public string CDSOKO { get; set; }                  //倉庫コード
+                public string KBHNKZ { get; set; }                  //品目課税区分
+                public string KBKEIG { get; set; }                  //軽減税率区分
+                public decimal QTHCTN { get; set; }                 //発注点数
+                public decimal QTTZAI { get; set; }                 //適正在庫数
+                public int YMSIKO { get; set; }                     //仕込開始年月
+                public int QTHNEN { get; set; }                     //平均算出年数
+                public decimal RTKEPN { get; set; }                 //欠品許容率
+                public string CDSRIS { get; set; }                  //シリーズコード
+                public decimal VLSIZE { get; set; }                 //サイズ
+                public string CDDCKA { get; set; }                  //債権貸方科目コード
+                public string CDDDKA { get; set; }                  //債権借方科目コード
+                public string CDICKA { get; set; }                  //債務(一般)貸方
+                public string CDIDKA { get; set; }                  //債務(一般)借方
+                public string CDSCKA { get; set; }                  //債務(製造)貸方
+                public string CDSDKA { get; set; }                  //債務(製造)借方
+                public decimal PRSANK { get; set; }                 //参考単価
+                public string CDKASH { get; set; }                  //加工担当部門
+                public decimal ATKKOS { get; set; }                 //加工工数
+            }
+
+            // 品目マスタをIDで取得するメソッド
+            public ItemMaster GetItemById(string itemCode)
+            {
+                ItemMaster item = null;
+
+                var query = @"
+                SELECT *
+                FROM MHINM
+                WHERE CDHINM = ?"; // SQL読み込みクエリ
+
+                using (var command = new OdbcCommand(query, _connection))
+                {
+                    command.Parameters.AddWithValue("CDHINM", itemCode);
+                    command.Transaction = this.transaction;
+
+                    using (var reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            item = new ItemMaster
+                            {
+
+                                FGDELE = reader["FGDELE"].ToString(),
+                                SPIUSR = reader["SPIUSR"].ToString(),
+                                SPIDTM = reader["SPIDTM"] as int? ?? 0,
+                                SPIPGM = reader["SPIPGM"].ToString(),
+                                SPUUSR = reader["SPUUSR"].ToString(),
+                                SPUDTM = reader["SPUDTM"] as int? ?? 0,
+                                SPUPGM = reader["SPUPGM"].ToString(),
+                                CDHINM = reader["CDHINM"].ToString(),
+                                NMHINM = reader["NMHINM"].ToString(),
+                                NRHINM = reader["NRHINM"]?.ToString() ?? null,
+                                NKHINM = reader["NKHINM"]?.ToString() ?? null,
+                                ENHINM = reader["ENHINM"]?.ToString() ?? null,
+                                ERHINM = reader["ERHINM"]?.ToString() ?? null,
+                                CDHINS = reader["CDHINS"]?.ToString() ?? null,
+                                NMHISJ = reader["NMHISJ"]?.ToString() ?? null,
+                                NMHISE = reader["NMHISE"]?.ToString() ?? null,
+                                CDTANI = reader["CDTANI"]?.ToString() ?? null,
+                                KBUISI = reader["KBUISI"]?.ToString() ?? null,
+                                KBCGHN = reader["KBCGHN"]?.ToString() ?? null,
+                                KBYOTO = reader["KBYOTO"]?.ToString() ?? null,
+                                KBKMTT = reader["KBKMTT"]?.ToString() ?? null,
+                                KBHNTY = reader["KBHNTY"]?.ToString() ?? null,
+                                CDHINB = reader["CDHINB"]?.ToString() ?? null,
+                                CDHNGP = reader["CDHNGP"]?.ToString() ?? null,
+                                NOREVS = reader["NOREVS"] as int? ?? 0,
+                                KBSING = reader["KBSING"]?.ToString() ?? null,
+                                VLZUBN = reader["VLZUBN"]?.ToString() ?? null,
+                                CDHHIN = reader["CDHHIN"]?.ToString() ?? null,
+                                NMBCLS = reader["NMBCLS"]?.ToString() ?? null,
+                                TXZUMN = reader["TXZUMN"]?.ToString() ?? null,
+                                TXBRTX = reader["TXBRTX"]?.ToString() ?? null,
+                                KBHREN = reader["KBHREN"]?.ToString() ?? null,
+                                NOSOZU = reader["NOSOZU"]?.ToString() ?? null,
+                                NOKIKN = reader["NOKIKN"]?.ToString() ?? null,
+                                TXZAIS = reader["TXZAIS"]?.ToString() ?? null,
+                                CDZAIS1 = reader["CDZAIS1"]?.ToString() ?? null,
+                                CDZAIS2 = reader["CDZAIS2"]?.ToString() ?? null,
+                                CDZAIS3 = reader["CDZAIS3"]?.ToString() ?? null,
+                                CDZAIR = reader["CDZAIR"]?.ToString() ?? null,
+                                CDGKAS = reader["CDGKAS"]?.ToString() ?? null,
+                                NOTANA = reader["NOTANA"]?.ToString() ?? null,
+                                CDKISH = reader["CDKISH"]?.ToString() ?? null,
+                                KBZAIR = reader["KBZAIR"]?.ToString() ?? null,
+                                KBZAIK = reader["KBZAIK"]?.ToString() ?? null,
+                                KBLTKR = reader["KBLTKR"]?.ToString() ?? null,
+                                KBSESK = reader["KBSESK"]?.ToString() ?? null,
+                                FGMILL = reader["FGMILL"]?.ToString() ?? null,
+                                FGKYOD = reader["FGKYOD"]?.ToString() ?? null,
+                                FGKENT = reader["FGKENT"]?.ToString() ?? null,
+                                FGSIJI = reader["FGSIJI"]?.ToString() ?? null,
+                                FGZUMN = reader["FGZUMN"]?.ToString() ?? null,
+                                FGSHIY = reader["FGSHIY"]?.ToString() ?? null,
+                                FGNETU = reader["FGNETU"]?.ToString() ?? null,
+                                FGSUNK = reader["FGSUNK"]?.ToString() ?? null,
+                                FGSETU = reader["FGSETU"]?.ToString() ?? null,
+                                FGKHKG = reader["FGKHKG"]?.ToString() ?? null,
+                                FGKGSY = reader["FGKGSY"]?.ToString() ?? null,
+                                FGPKAN = reader["FGPKAN"]?.ToString() ?? null,
+                                FGZKEN = reader["FGZKEN"]?.ToString() ?? null,
+                                FGTANS = reader["FGTANS"]?.ToString() ?? null,
+                                FGZTOS = reader["FGZTOS"]?.ToString() ?? null,
+                                FGZASK = reader["FGZASK"]?.ToString() ?? null,
+                                FGTJIG = reader["FGTJIG"]?.ToString() ?? null,
+                                KBCYLI = reader["KBCYLI"]?.ToString() ?? null,
+                                KBGKAK = reader["KBGKAK"]?.ToString() ?? null,
+                                KBTEHI = reader["KBTEHI"]?.ToString() ?? null,
+                                KBNYTS = reader["KBNYTS"]?.ToString() ?? null,
+                                KBNYKN = reader["KBNYKN"]?.ToString() ?? null,
+                                KBKNSA = reader["KBKNSA"]?.ToString() ?? null,
+                                QTLOTS = reader["QTLOTS"] as decimal? ?? 0,
+                                QTHCSU = reader["QTHCSU"] as decimal? ?? 0,
+                                QTIMOJ = reader["QTIMOJ"] as decimal? ?? 0,
+                                PRIMOT = reader["PRIMOT"] as decimal? ?? 0,
+                                VLBSUN = reader["VLBSUN"]?.ToString() ?? null,
+                                TXBSUN = reader["TXBSUN"]?.ToString() ?? null,
+                                VLSUN1 = reader["VLSUN1"] as decimal? ?? 0,
+                                VLSUN2 = reader["VLSUN2"] as decimal? ?? 0,
+                                VLSUN3 = reader["VLSUN3"] as decimal? ?? 0,
+                                QTLDTM = reader["QTLDTM"] as int? ?? 0,
+                                TXLTTM = reader["TXLTTM"]?.ToString() ?? null,
+                                QTBUHJ = reader["QTBUHJ"] as decimal? ?? 0,
+                                TXBUHJ = reader["TXBUHJ"]?.ToString() ?? null,
+                                QTTNJU = reader["QTTNJU"] as decimal? ?? 0,
+                                CDDFSH = reader["CDDFSH"]?.ToString() ?? null,
+                                CDMEKA = reader["CDMEKA"]?.ToString() ?? null,
+                                CDDAIR = reader["CDDAIR"]?.ToString() ?? null,
+                                TXMKAT = reader["TXMKAT"]?.ToString() ?? null,
+                                TXMEKA = reader["TXMEKA"]?.ToString() ?? null,
+                                TXBUHN = reader["TXBUHN"]?.ToString() ?? null,
+                                TXB512 = reader["TXB512"]?.ToString() ?? null,
+                                CDSOKO = reader["CDSOKO"]?.ToString() ?? null,
+                                KBHNKZ = reader["KBHNKZ"]?.ToString() ?? null,
+                                KBKEIG = reader["KBKEIG"]?.ToString() ?? null,
+                                QTHCTN = reader["QTHCTN"] as decimal? ?? 0,
+                                QTTZAI = reader["QTTZAI"] as decimal? ?? 0,
+                                YMSIKO = reader["YMSIKO"] as int? ?? 0,
+                                QTHNEN = reader["QTHNEN"] as int? ?? 0,
+                                RTKEPN = reader["RTKEPN"] as decimal? ?? 0,
+                                CDSRIS = reader["CDSRIS"]?.ToString() ?? null,
+                                VLSIZE = reader["VLSIZE"] as decimal? ?? 0,
+                                CDDCKA = reader["CDDCKA"]?.ToString() ?? null,
+                                CDDDKA = reader["CDDDKA"]?.ToString() ?? null,
+                                CDICKA = reader["CDICKA"]?.ToString() ?? null,
+                                CDIDKA = reader["CDIDKA"]?.ToString() ?? null,
+                                CDSCKA = reader["CDSCKA"]?.ToString() ?? null,
+                                CDSDKA = reader["CDSDKA"]?.ToString() ?? null,
+                                PRSANK = reader["PRSANK"] as decimal? ?? 0,
+                                CDKASH = reader["CDKASH"]?.ToString() ?? null,
+                                ATKKOS = reader["ATKKOS"] as decimal? ?? 0
+                            };
+                        }
+                    }
+                }
+
+                return item;
+            }
+
+            // 品目マスタを挿入するメソッド
+            public void InsertItem(ItemMaster item)
+            {
+                var query = @"
+	            INSERT INTO MHINM (
+	                FGDELE, SPIUSR, SPIDTM, SPIPGM, SPUUSR,
+                    SPUDTM, SPUPGM, CDHINM, NMHINM, NRHINM,
+	                NKHINM, ENHINM, ERHINM, CDHINS, NMHISJ,
+	                NMHISE, CDTANI, KBUISI, KBCGHN, KBYOTO,
+	                KBKMTT, KBHNTY, CDHINB, CDHNGP, NOREVS,
+	                KBSING, VLZUBN, CDHHIN, NMBCLS, TXZUMN,
+	                TXBRTX, KBHREN, NOSOZU, NOKIKN, TXZAIS,
+	                CDZAIS1, CDZAIS2, CDZAIS3, CDZAIR, CDGKAS,
+	                NOTANA, CDKISH, KBZAIR, KBZAIK, KBLTKR,
+	                KBSESK, FGMILL, FGKYOD, FGKENT, FGSIJI,
+	                FGZUMN, FGSHIY, FGNETU, FGSUNK, FGSETU,
+	                FGKHKG, FGKGSY, FGPKAN, FGZKEN, FGTANS,
+	                FGZTOS, FGZASK, FGTJIG, KBCYLI, KBGKAK,
+	                KBTEHI, KBNYTS, KBNYKN, KBKNSA, QTLOTS,
+	                QTHCSU, QTIMOJ, PRIMOT, VLBSUN, TXBSUN,
+	                VLSUN1, VLSUN2, VLSUN3, QTLDTM, TXLTTM,
+	                QTBUHJ, TXBUHJ, QTTNJU, CDDFSH, CDMEKA,
+	                CDDAIR, TXMKAT, TXMEKA, TXBUHN, TXB512,
+	                CDSOKO, KBHNKZ, KBKEIG, QTHCTN, QTTZAI,
+	                YMSIKO, QTHNEN, RTKEPN, CDSRIS, VLSIZE,
+	                CDDCKA, CDDDKA, CDICKA, CDIDKA, CDSCKA,
+	                CDSDKA, PRSANK, CDKASH, ATKKOS
+	            ) VALUES (
+                    ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+                    ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+                    ?,?,?,?,?,?,?,?,?
+	            )"; // SQL挿入クエリ
+
+                using (var command = new OdbcCommand(query, _connection))
+                {
+                    command.Parameters.AddWithValue("@FGDELE", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@SPIUSR", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@SPIDTM", Convert.ToInt32(item.SPIDTM)); // int への適切な変換
+                    command.Parameters.AddWithValue("@SPIPGM", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@SPUUSR", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@SPUDTM", Convert.ToInt32(item.SPIDTM)); // int への適切な変換
+                    command.Parameters.AddWithValue("@SPUPGM", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@CDHINM", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@NMHINM", string.IsNullOrEmpty(item.NMHINM) ? (object)DBNull.Value : item.NMHINM);
+                    command.Parameters.AddWithValue("@NRHINM", string.IsNullOrEmpty(item.NRHINM) ? (object)DBNull.Value : item.NRHINM);
+                    command.Parameters.AddWithValue("@NKHINM", string.IsNullOrEmpty(item.NKHINM) ? (object)DBNull.Value : item.NKHINM);
+                    command.Parameters.AddWithValue("@ENHINM", string.IsNullOrEmpty(item.ENHINM) ? (object)DBNull.Value : item.ENHINM);
+                    command.Parameters.AddWithValue("@ERHINM", string.IsNullOrEmpty(item.ERHINM) ? (object)DBNull.Value : item.ERHINM);
+                    command.Parameters.AddWithValue("@CDHINS", string.IsNullOrEmpty(item.CDHINS) ? (object)DBNull.Value : item.CDHINS);
+                    command.Parameters.AddWithValue("@NMHISJ", string.IsNullOrEmpty(item.NMHISJ) ? (object)DBNull.Value : item.NMHISJ);
+                    command.Parameters.AddWithValue("@NMHISE", string.IsNullOrEmpty(item.NMHISE) ? (object)DBNull.Value : item.NMHISE);
+                    command.Parameters.AddWithValue("@CDTANI", string.IsNullOrEmpty(item.CDTANI) ? (object)DBNull.Value : item.CDTANI);
+                    command.Parameters.AddWithValue("@KBUISI", string.IsNullOrEmpty(item.KBUISI) ? (object)DBNull.Value : item.KBUISI);
+                    command.Parameters.AddWithValue("@KBCGHN", string.IsNullOrEmpty(item.KBCGHN) ? (object)DBNull.Value : item.KBCGHN);
+                    command.Parameters.AddWithValue("@KBYOTO", string.IsNullOrEmpty(item.KBYOTO) ? (object)DBNull.Value : item.KBYOTO);
+                    command.Parameters.AddWithValue("@KBKMTT", string.IsNullOrEmpty(item.KBKMTT) ? (object)DBNull.Value : item.KBKMTT);
+                    command.Parameters.AddWithValue("@KBHNTY", string.IsNullOrEmpty(item.KBHNTY) ? (object)DBNull.Value : item.KBHNTY);
+                    command.Parameters.AddWithValue("@CDHINB", string.IsNullOrEmpty(item.CDHINB) ? (object)DBNull.Value : item.CDHINB);
+                    command.Parameters.AddWithValue("@CDHNGP", string.IsNullOrEmpty(item.CDHNGP) ? (object)DBNull.Value : item.CDHNGP);
+                    command.Parameters.AddWithValue("@NOREVS", Convert.ToInt32(item.NOREVS)); // int への適切な変換
+                    command.Parameters.AddWithValue("@KBSING", string.IsNullOrEmpty(item.KBSING) ? (object)DBNull.Value : item.KBSING);
+                    command.Parameters.AddWithValue("@VLZUBN", string.IsNullOrEmpty(item.VLZUBN) ? (object)DBNull.Value : item.VLZUBN);
+                    command.Parameters.AddWithValue("@CDHHIN", string.IsNullOrEmpty(item.CDHHIN) ? (object)DBNull.Value : item.CDHHIN);
+                    command.Parameters.AddWithValue("@NMBCLS", string.IsNullOrEmpty(item.NMBCLS) ? (object)DBNull.Value : item.NMBCLS);
+                    command.Parameters.AddWithValue("@TXZUMN", string.IsNullOrEmpty(item.TXZUMN) ? (object)DBNull.Value : item.TXZUMN);
+                    command.Parameters.AddWithValue("@TXBRTX", string.IsNullOrEmpty(item.TXBRTX) ? (object)DBNull.Value : item.TXBRTX);
+                    command.Parameters.AddWithValue("@KBHREN", string.IsNullOrEmpty(item.KBHREN) ? (object)DBNull.Value : item.KBHREN);
+                    command.Parameters.AddWithValue("@NOSOZU", string.IsNullOrEmpty(item.NOSOZU) ? (object)DBNull.Value : item.NOSOZU);
+                    command.Parameters.AddWithValue("@NOKIKN", string.IsNullOrEmpty(item.NOKIKN) ? (object)DBNull.Value : item.NOKIKN);
+                    command.Parameters.AddWithValue("@TXZAIS", string.IsNullOrEmpty(item.TXZAIS) ? (object)DBNull.Value : item.TXZAIS);
+                    command.Parameters.AddWithValue("@CDZAIS1", string.IsNullOrEmpty(item.CDZAIS1) ? (object)DBNull.Value : item.CDZAIS1);
+                    command.Parameters.AddWithValue("@CDZAIS2", string.IsNullOrEmpty(item.CDZAIS2) ? (object)DBNull.Value : item.CDZAIS2);
+                    command.Parameters.AddWithValue("@CDZAIS3", string.IsNullOrEmpty(item.CDZAIS3) ? (object)DBNull.Value : item.CDZAIS3);
+                    command.Parameters.AddWithValue("@CDZAIR", string.IsNullOrEmpty(item.CDZAIR) ? (object)DBNull.Value : item.CDZAIR);
+                    command.Parameters.AddWithValue("@CDGKAS", string.IsNullOrEmpty(item.CDGKAS) ? (object)DBNull.Value : item.CDGKAS);
+                    command.Parameters.AddWithValue("@NOTANA", string.IsNullOrEmpty(item.NOTANA) ? (object)DBNull.Value : item.NOTANA);
+                    command.Parameters.AddWithValue("@CDKISH", string.IsNullOrEmpty(item.CDKISH) ? (object)DBNull.Value : item.CDKISH);
+                    command.Parameters.AddWithValue("@KBZAIR", string.IsNullOrEmpty(item.KBZAIR) ? (object)DBNull.Value : item.KBZAIR);
+                    command.Parameters.AddWithValue("@KBZAIK", string.IsNullOrEmpty(item.KBZAIK) ? (object)DBNull.Value : item.KBZAIK);
+                    command.Parameters.AddWithValue("@KBLTKR", string.IsNullOrEmpty(item.KBLTKR) ? (object)DBNull.Value : item.KBLTKR);
+                    command.Parameters.AddWithValue("@KBSESK", string.IsNullOrEmpty(item.KBSESK) ? (object)DBNull.Value : item.KBSESK);
+                    command.Parameters.AddWithValue("@FGMILL", string.IsNullOrEmpty(item.FGMILL) ? (object)DBNull.Value : item.FGMILL);
+                    command.Parameters.AddWithValue("@FGKYOD", string.IsNullOrEmpty(item.FGKYOD) ? (object)DBNull.Value : item.FGKYOD);
+                    command.Parameters.AddWithValue("@FGKENT", string.IsNullOrEmpty(item.FGKENT) ? (object)DBNull.Value : item.FGKENT);
+                    command.Parameters.AddWithValue("@FGSIJI", string.IsNullOrEmpty(item.FGSIJI) ? (object)DBNull.Value : item.FGSIJI);
+                    command.Parameters.AddWithValue("@FGZUMN", string.IsNullOrEmpty(item.FGZUMN) ? (object)DBNull.Value : item.FGZUMN);
+                    command.Parameters.AddWithValue("@FGSHIY", string.IsNullOrEmpty(item.FGSHIY) ? (object)DBNull.Value : item.FGSHIY);
+                    command.Parameters.AddWithValue("@FGNETU", string.IsNullOrEmpty(item.FGNETU) ? (object)DBNull.Value : item.FGNETU);
+                    command.Parameters.AddWithValue("@FGSUNK", string.IsNullOrEmpty(item.FGSUNK) ? (object)DBNull.Value : item.FGSUNK);
+                    command.Parameters.AddWithValue("@FGSETU", string.IsNullOrEmpty(item.FGSETU) ? (object)DBNull.Value : item.FGSETU);
+                    command.Parameters.AddWithValue("@FGKHKG", string.IsNullOrEmpty(item.FGKHKG) ? (object)DBNull.Value : item.FGKHKG);
+                    command.Parameters.AddWithValue("@FGKGSY", string.IsNullOrEmpty(item.FGKGSY) ? (object)DBNull.Value : item.FGKGSY);
+                    command.Parameters.AddWithValue("@FGPKAN", string.IsNullOrEmpty(item.FGPKAN) ? (object)DBNull.Value : item.FGPKAN);
+                    command.Parameters.AddWithValue("@FGZKEN", string.IsNullOrEmpty(item.FGZKEN) ? (object)DBNull.Value : item.FGZKEN);
+                    command.Parameters.AddWithValue("@FGTANS", string.IsNullOrEmpty(item.FGTANS) ? (object)DBNull.Value : item.FGTANS);
+                    command.Parameters.AddWithValue("@FGZTOS", string.IsNullOrEmpty(item.FGZTOS) ? (object)DBNull.Value : item.FGZTOS);
+                    command.Parameters.AddWithValue("@FGZASK", string.IsNullOrEmpty(item.FGZASK) ? (object)DBNull.Value : item.FGZASK);
+                    command.Parameters.AddWithValue("@FGTJIG", string.IsNullOrEmpty(item.FGTJIG) ? (object)DBNull.Value : item.FGTJIG);
+                    command.Parameters.AddWithValue("@KBCYLI", string.IsNullOrEmpty(item.KBCYLI) ? (object)DBNull.Value : item.KBCYLI);
+                    command.Parameters.AddWithValue("@KBGKAK", string.IsNullOrEmpty(item.KBGKAK) ? (object)DBNull.Value : item.KBGKAK);
+                    command.Parameters.AddWithValue("@KBTEHI", string.IsNullOrEmpty(item.KBTEHI) ? (object)DBNull.Value : item.KBTEHI);
+                    command.Parameters.AddWithValue("@KBNYTS", string.IsNullOrEmpty(item.KBNYTS) ? (object)DBNull.Value : item.KBNYTS);
+                    command.Parameters.AddWithValue("@KBNYKN", string.IsNullOrEmpty(item.KBNYKN) ? (object)DBNull.Value : item.KBNYKN);
+                    command.Parameters.AddWithValue("@KBKNSA", string.IsNullOrEmpty(item.KBKNSA) ? (object)DBNull.Value : item.KBKNSA);
+                    command.Parameters.AddWithValue("@QTLOTS", Convert.ToDecimal(item.QTLOTS)); 
+                    command.Parameters.AddWithValue("@QTHCSU", Convert.ToDecimal(item.QTHCSU));
+                    command.Parameters.AddWithValue("@QTIMOJ", Convert.ToDecimal(item.QTIMOJ)); // デフォルト値
+                    command.Parameters.AddWithValue("@PRIMOT", Convert.ToDecimal(item.PRIMOT)); // デフォルト値
+                    command.Parameters.AddWithValue("@VLBSUN", string.IsNullOrEmpty(item.VLBSUN) ? (object)DBNull.Value : item.VLBSUN);
+                    command.Parameters.AddWithValue("@TXBSUN", string.IsNullOrEmpty(item.TXBSUN) ? (object)DBNull.Value : item.TXBSUN);
+                    command.Parameters.AddWithValue("@VLSUN1", Convert.ToDecimal(item.VLSUN1)); // デフォルト値
+                    command.Parameters.AddWithValue("@VLSUN2", Convert.ToDecimal(item.VLSUN2)); // デフォルト値
+                    command.Parameters.AddWithValue("@VLSUN3", Convert.ToDecimal(item.VLSUN3)); // デフォルト値
+                    command.Parameters.AddWithValue("@QTLDTM", Convert.ToInt32(item.QTLDTM));
+                    command.Parameters.AddWithValue("@TXLTTM", string.IsNullOrEmpty(item.TXLTTM) ? (object)DBNull.Value : item.TXLTTM);
+                    command.Parameters.AddWithValue("@QTBUHJ", Convert.ToDecimal(item.QTBUHJ)); // デフォルト値
+                    command.Parameters.AddWithValue("@TXBUHJ", string.IsNullOrEmpty(item.TXBUHJ) ? (object)DBNull.Value : item.TXBUHJ);
+                    command.Parameters.AddWithValue("@QTTNJU", Convert.ToDecimal(item.QTTNJU)); // デフォルト値
+                    command.Parameters.AddWithValue("@CDDFSH", string.IsNullOrEmpty(item.CDDFSH) ? (object)DBNull.Value : item.CDDFSH);
+                    command.Parameters.AddWithValue("@CDMEKA", string.IsNullOrEmpty(item.CDMEKA) ? (object)DBNull.Value : item.CDMEKA);
+                    command.Parameters.AddWithValue("@CDDAIR", string.IsNullOrEmpty(item.CDDAIR) ? (object)DBNull.Value : item.CDDAIR);
+                    command.Parameters.AddWithValue("@TXMKAT", string.IsNullOrEmpty(item.TXMKAT) ? (object)DBNull.Value : item.TXMKAT);
+                    command.Parameters.AddWithValue("@TXMEKA", string.IsNullOrEmpty(item.TXMEKA) ? (object)DBNull.Value : item.TXMEKA);
+                    command.Parameters.AddWithValue("@TXBUHN", string.IsNullOrEmpty(item.TXBUHN) ? (object)DBNull.Value : item.TXBUHN);
+                    command.Parameters.AddWithValue("@TXB512", string.IsNullOrEmpty(item.TXB512) ? (object)DBNull.Value : item.TXB512);
+                    command.Parameters.AddWithValue("@CDSOKO", string.IsNullOrEmpty(item.CDSOKO) ? (object)DBNull.Value : item.CDSOKO);
+                    command.Parameters.AddWithValue("@KBHNKZ", string.IsNullOrEmpty(item.KBHNKZ) ? (object)DBNull.Value : item.KBHNKZ);
+                    command.Parameters.AddWithValue("@KBKEIG", string.IsNullOrEmpty(item.KBKEIG) ? (object)DBNull.Value : item.KBKEIG);
+                    command.Parameters.AddWithValue("@QTHCTN", Convert.ToDecimal(item.QTHCTN)); // デフォルト値
+                    command.Parameters.AddWithValue("@QTTZAI", Convert.ToDecimal(item.QTTZAI)); // デフォルト値
+                    command.Parameters.AddWithValue("@YMSIKO", Convert.ToInt32(item.YMSIKO));
+                    command.Parameters.AddWithValue("@QTHNEN", Convert.ToDecimal(item.QTHNEN)); // デフォルト値
+                    command.Parameters.AddWithValue("@RTKEPN", Convert.ToDecimal(item.RTKEPN)); // デフォルト値
+                    command.Parameters.AddWithValue("@CDSRIS", string.IsNullOrEmpty(item.CDSRIS) ? (object)DBNull.Value : item.CDSRIS);
+                    command.Parameters.AddWithValue("@VLSIZE", Convert.ToDecimal(item.VLSIZE));
+                    command.Parameters.AddWithValue("@CDDCKA", string.IsNullOrEmpty(item.CDDCKA) ? (object)DBNull.Value : item.CDDCKA);
+                    command.Parameters.AddWithValue("@CDDDKA", string.IsNullOrEmpty(item.CDDDKA) ? (object)DBNull.Value : item.CDDDKA);
+                    command.Parameters.AddWithValue("@CDICKA", string.IsNullOrEmpty(item.CDICKA) ? (object)DBNull.Value : item.CDICKA);
+                    command.Parameters.AddWithValue("@CDIDKA", string.IsNullOrEmpty(item.CDIDKA) ? (object)DBNull.Value : item.CDIDKA);
+                    command.Parameters.AddWithValue("@CDSCKA", string.IsNullOrEmpty(item.CDSCKA) ? (object)DBNull.Value : item.CDSCKA);
+                    command.Parameters.AddWithValue("@CDSDKA", string.IsNullOrEmpty(item.CDSDKA) ? (object)DBNull.Value : item.CDSDKA);
+                    command.Parameters.AddWithValue("@PRSANK", Convert.ToDecimal(item.PRSANK)); // デフォルト値
+                    command.Parameters.AddWithValue("@CDKASH", string.IsNullOrEmpty(item.CDKASH) ? (object)DBNull.Value : item.CDKASH);
+                    command.Parameters.AddWithValue("@ATKKOS", Convert.ToDecimal(item.ATKKOS)); // デフォルト値
+
+                    command.Parameters.AddWithValue("@CDHINM", item.CDHINM); // 条件用の品目コードを追加
+
+                    command.Transaction = this.transaction;
+                    command.ExecuteNonQuery(); // 挿入を実行
+                }
+            }
+            // 品目マスタを更新するメソッド
+            // 品目マスタを更新するメソッド
+            public void UpdateItem(ItemMaster item)
+            {
+                var query = @"
+	            UPDATE MHINM
+	            SET 
+                    FGDELE = ?, SPIUSR = ?, SPIDTM = ?, SPIPGM = ?,
+                    SPUUSR = ?, SPUDTM = ?, SPUPGM = ?,	
+                    NMHINM = ?, NRHINM = ?, NKHINM = ?, ENHINM = ?, ERHINM = ?, 
+	                CDHINS = ?, NMHISJ = ?, NMHISE = ?, CDTANI = ?, KBUISI = ?,
+	                KBCGHN = ?, KBYOTO = ?, KBKMTT = ?, KBHNTY = ?, CDHINB = ?,
+	                CDHNGP = ?, NOREVS = ?, KBSING = ?, VLZUBN = ?, CDHHIN = ?,
+	                NMBCLS = ?, TXZUMN = ?, TXBRTX = ?, KBHREN = ?, NOSOZU = ?,
+	                NOKIKN = ?, TXZAIS = ?, CDZAIS1 = ?, CDZAIS2 = ?, CDZAIS3 = ?,
+	                CDZAIR = ?, CDGKAS = ?, NOTANA = ?, CDKISH = ?, KBZAIR = ?,
+	                KBZAIK = ?, KBLTKR = ?, KBSESK = ?, FGMILL = ?, FGKYOD = ?,
+	                FGKENT = ?, FGSIJI = ?, FGZUMN = ?, FGSHIY = ?, FGNETU = ?,
+	                FGSUNK = ?, FGSETU = ?, FGKHKG = ?, FGKGSY = ?, FGPKAN = ?,
+	                FGZKEN = ?, FGTANS = ?, FGZTOS = ?, FGZASK = ?, FGTJIG = ?,
+	                KBCYLI = ?, KBGKAK = ?, KBTEHI = ?, KBNYTS = ?, KBNYKN = ?,
+	                KBKNSA = ?, QTLOTS = ?, QTHCSU = ?, QTIMOJ = ?, PRIMOT = ?,
+	                VLBSUN = ?, TXBSUN = ?, VLSUN1 = ?, VLSUN2 = ?, VLSUN3 = ?,
+	                QTLDTM = ?, TXLTTM = ?, QTBUHJ = ?, TXBUHJ = ?, QTTNJU = ?,
+	                CDDFSH = ?, CDMEKA = ?, CDDAIR = ?, TXMKAT = ?, TXMEKA = ?,
+	                TXBUHN = ?, TXB512 = ?, CDSOKO = ?, KBHNKZ = ?, KBKEIG = ?,
+	                QTHCTN = ?, QTTZAI = ?, YMSIKO = ?, QTHNEN = ?, RTKEPN = ?,
+	                CDSRIS = ?, VLSIZE = ?, CDDCKA = ?, CDDDKA = ?, CDICKA = ?,
+	                CDIDKA = ?, CDSCKA = ?, CDSDKA = ?, PRSANK = ?, CDKASH = ?,
+	                ATKKOS = ?
+	            WHERE CDHINM = ?"; // 更新クエリ
+
+                using (var command = new OdbcCommand(query, _connection))
+                {
+                    command.Parameters.AddWithValue("@FGDELE", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@SPIUSR", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@SPIDTM", Convert.ToInt32(item.SPIDTM)); // int への適切な変換
+                    command.Parameters.AddWithValue("@SPIPGM", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@SPUUSR", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@SPUDTM", Convert.ToInt32(item.SPIDTM)); // int への適切な変換
+                    command.Parameters.AddWithValue("@SPUPGM", string.IsNullOrEmpty(item.CDHINM) ? (object)DBNull.Value : item.CDHINM);
+                    command.Parameters.AddWithValue("@NMHINM", string.IsNullOrEmpty(item.NMHINM) ? (object)DBNull.Value : item.NMHINM);
+                    command.Parameters.AddWithValue("@NRHINM", string.IsNullOrEmpty(item.NRHINM) ? (object)DBNull.Value : item.NRHINM);
+                    command.Parameters.AddWithValue("@NKHINM", string.IsNullOrEmpty(item.NKHINM) ? (object)DBNull.Value : item.NKHINM);
+                    command.Parameters.AddWithValue("@ENHINM", string.IsNullOrEmpty(item.ENHINM) ? (object)DBNull.Value : item.ENHINM);
+                    command.Parameters.AddWithValue("@ERHINM", string.IsNullOrEmpty(item.ERHINM) ? (object)DBNull.Value : item.ERHINM);
+                    command.Parameters.AddWithValue("@CDHINS", string.IsNullOrEmpty(item.CDHINS) ? (object)DBNull.Value : item.CDHINS);
+                    command.Parameters.AddWithValue("@NMHISJ", string.IsNullOrEmpty(item.NMHISJ) ? (object)DBNull.Value : item.NMHISJ);
+                    command.Parameters.AddWithValue("@NMHISE", string.IsNullOrEmpty(item.NMHISE) ? (object)DBNull.Value : item.NMHISE);
+                    command.Parameters.AddWithValue("@CDTANI", string.IsNullOrEmpty(item.CDTANI) ? (object)DBNull.Value : item.CDTANI);
+                    command.Parameters.AddWithValue("@KBUISI", string.IsNullOrEmpty(item.KBUISI) ? (object)DBNull.Value : item.KBUISI);
+                    command.Parameters.AddWithValue("@KBCGHN", string.IsNullOrEmpty(item.KBCGHN) ? (object)DBNull.Value : item.KBCGHN);
+                    command.Parameters.AddWithValue("@KBYOTO", string.IsNullOrEmpty(item.KBYOTO) ? (object)DBNull.Value : item.KBYOTO);
+                    command.Parameters.AddWithValue("@KBKMTT", string.IsNullOrEmpty(item.KBKMTT) ? (object)DBNull.Value : item.KBKMTT);
+                    command.Parameters.AddWithValue("@KBHNTY", string.IsNullOrEmpty(item.KBHNTY) ? (object)DBNull.Value : item.KBHNTY);
+                    command.Parameters.AddWithValue("@CDHINB", string.IsNullOrEmpty(item.CDHINB) ? (object)DBNull.Value : item.CDHINB);
+                    command.Parameters.AddWithValue("@CDHNGP", string.IsNullOrEmpty(item.CDHNGP) ? (object)DBNull.Value : item.CDHNGP);
+                    command.Parameters.AddWithValue("@NOREVS", Convert.ToInt32(item.NOREVS));
+                    command.Parameters.AddWithValue("@KBSING", string.IsNullOrEmpty(item.KBSING) ? (object)DBNull.Value : item.KBSING);
+                    command.Parameters.AddWithValue("@VLZUBN", string.IsNullOrEmpty(item.VLZUBN) ? (object)DBNull.Value : item.VLZUBN);
+                    command.Parameters.AddWithValue("@CDHHIN", string.IsNullOrEmpty(item.CDHHIN) ? (object)DBNull.Value : item.CDHHIN);
+                    command.Parameters.AddWithValue("@NMBCLS", string.IsNullOrEmpty(item.NMBCLS) ? (object)DBNull.Value : item.NMBCLS);
+                    command.Parameters.AddWithValue("@TXZUMN", string.IsNullOrEmpty(item.TXZUMN) ? (object)DBNull.Value : item.TXZUMN);
+                    command.Parameters.AddWithValue("@TXBRTX", string.IsNullOrEmpty(item.TXBRTX) ? (object)DBNull.Value : item.TXBRTX);
+                    command.Parameters.AddWithValue("@KBHREN", string.IsNullOrEmpty(item.KBHREN) ? (object)DBNull.Value : item.KBHREN);
+                    command.Parameters.AddWithValue("@NOSOZU", string.IsNullOrEmpty(item.NOSOZU) ? (object)DBNull.Value : item.NOSOZU);
+                    command.Parameters.AddWithValue("@NOKIKN", string.IsNullOrEmpty(item.NOKIKN) ? (object)DBNull.Value : item.NOKIKN);
+                    command.Parameters.AddWithValue("@TXZAIS", string.IsNullOrEmpty(item.TXZAIS) ? (object)DBNull.Value : item.TXZAIS);
+                    command.Parameters.AddWithValue("@CDZAIS1", string.IsNullOrEmpty(item.CDZAIS1) ? (object)DBNull.Value : item.CDZAIS1);
+                    command.Parameters.AddWithValue("@CDZAIS2", string.IsNullOrEmpty(item.CDZAIS2) ? (object)DBNull.Value : item.CDZAIS2);
+                    command.Parameters.AddWithValue("@CDZAIS3", string.IsNullOrEmpty(item.CDZAIS3) ? (object)DBNull.Value : item.CDZAIS3);
+                    command.Parameters.AddWithValue("@CDZAIR", string.IsNullOrEmpty(item.CDZAIR) ? (object)DBNull.Value : item.CDZAIR);
+                    command.Parameters.AddWithValue("@CDGKAS", string.IsNullOrEmpty(item.CDGKAS) ? (object)DBNull.Value : item.CDGKAS);
+                    command.Parameters.AddWithValue("@NOTANA", string.IsNullOrEmpty(item.NOTANA) ? (object)DBNull.Value : item.NOTANA);
+                    command.Parameters.AddWithValue("@CDKISH", string.IsNullOrEmpty(item.CDKISH) ? (object)DBNull.Value : item.CDKISH);
+                    command.Parameters.AddWithValue("@KBZAIR", string.IsNullOrEmpty(item.KBZAIR) ? (object)DBNull.Value : item.KBZAIR);
+                    command.Parameters.AddWithValue("@KBZAIK", string.IsNullOrEmpty(item.KBZAIK) ? (object)DBNull.Value : item.KBZAIK);
+                    command.Parameters.AddWithValue("@KBLTKR", string.IsNullOrEmpty(item.KBLTKR) ? (object)DBNull.Value : item.KBLTKR);
+                    command.Parameters.AddWithValue("@KBSESK", string.IsNullOrEmpty(item.KBSESK) ? (object)DBNull.Value : item.KBSESK);
+                    command.Parameters.AddWithValue("@FGMILL", string.IsNullOrEmpty(item.FGMILL) ? (object)DBNull.Value : item.FGMILL);
+                    command.Parameters.AddWithValue("@FGKYOD", string.IsNullOrEmpty(item.FGKYOD) ? (object)DBNull.Value : item.FGKYOD);
+                    command.Parameters.AddWithValue("@FGKENT", string.IsNullOrEmpty(item.FGKENT) ? (object)DBNull.Value : item.FGKENT);
+                    command.Parameters.AddWithValue("@FGSIJI", string.IsNullOrEmpty(item.FGSIJI) ? (object)DBNull.Value : item.FGSIJI);
+                    command.Parameters.AddWithValue("@FGZUMN", string.IsNullOrEmpty(item.FGZUMN) ? (object)DBNull.Value : item.FGZUMN);
+                    command.Parameters.AddWithValue("@FGSHIY", string.IsNullOrEmpty(item.FGSHIY) ? (object)DBNull.Value : item.FGSHIY);
+                    command.Parameters.AddWithValue("@FGNETU", string.IsNullOrEmpty(item.FGNETU) ? (object)DBNull.Value : item.FGNETU);
+                    command.Parameters.AddWithValue("@FGSUNK", string.IsNullOrEmpty(item.FGSUNK) ? (object)DBNull.Value : item.FGSUNK);
+                    command.Parameters.AddWithValue("@FGSETU", string.IsNullOrEmpty(item.FGSETU) ? (object)DBNull.Value : item.FGSETU);
+                    command.Parameters.AddWithValue("@FGKHKG", string.IsNullOrEmpty(item.FGKHKG) ? (object)DBNull.Value : item.FGKHKG);
+                    command.Parameters.AddWithValue("@FGKGSY", string.IsNullOrEmpty(item.FGKGSY) ? (object)DBNull.Value : item.FGKGSY);
+                    command.Parameters.AddWithValue("@FGPKAN", string.IsNullOrEmpty(item.FGPKAN) ? (object)DBNull.Value : item.FGPKAN);
+                    command.Parameters.AddWithValue("@FGZKEN", string.IsNullOrEmpty(item.FGZKEN) ? (object)DBNull.Value : item.FGZKEN);
+                    command.Parameters.AddWithValue("@FGTANS", string.IsNullOrEmpty(item.FGTANS) ? (object)DBNull.Value : item.FGTANS);
+                    command.Parameters.AddWithValue("@FGZTOS", string.IsNullOrEmpty(item.FGZTOS) ? (object)DBNull.Value : item.FGZTOS);
+                    command.Parameters.AddWithValue("@FGZASK", string.IsNullOrEmpty(item.FGZASK) ? (object)DBNull.Value : item.FGZASK);
+                    command.Parameters.AddWithValue("@FGTJIG", string.IsNullOrEmpty(item.FGTJIG) ? (object)DBNull.Value : item.FGTJIG);
+                    command.Parameters.AddWithValue("@KBCYLI", string.IsNullOrEmpty(item.KBCYLI) ? (object)DBNull.Value : item.KBCYLI);
+                    command.Parameters.AddWithValue("@KBGKAK", string.IsNullOrEmpty(item.KBGKAK) ? (object)DBNull.Value : item.KBGKAK);
+                    command.Parameters.AddWithValue("@KBTEHI", item.KBTEHI ?? "999"); // デフォルトの値
+                    command.Parameters.AddWithValue("@KBNYTS", string.IsNullOrEmpty(item.KBNYTS) ? (object)DBNull.Value : item.KBNYTS);
+                    command.Parameters.AddWithValue("@KBNYKN", string.IsNullOrEmpty(item.KBNYKN) ? (object)DBNull.Value : item.KBNYKN);
+                    command.Parameters.AddWithValue("@KBKNSA", string.IsNullOrEmpty(item.KBKNSA) ? (object)DBNull.Value : item.KBKNSA);
+                    command.Parameters.AddWithValue("@QTLOTS", Convert.ToDecimal(item.QTLOTS)); // デフォルト値
+                    command.Parameters.AddWithValue("@QTHCSU", Convert.ToDecimal(item.QTHCSU)); // デフォルト値
+                    command.Parameters.AddWithValue("@QTIMOJ", Convert.ToDecimal(item.QTIMOJ)); // デフォルト値
+                    command.Parameters.AddWithValue("@PRIMOT", Convert.ToDecimal(item.PRIMOT)); // デフォルト値
+                    command.Parameters.AddWithValue("@VLBSUN", string.IsNullOrEmpty(item.VLBSUN) ? (object)DBNull.Value : item.VLBSUN);
+                    command.Parameters.AddWithValue("@TXBSUN", string.IsNullOrEmpty(item.TXBSUN) ? (object)DBNull.Value : item.TXBSUN);
+                    command.Parameters.AddWithValue("@VLSUN1", Convert.ToDecimal(item.VLSUN1)); // デフォルト値
+                    command.Parameters.AddWithValue("@VLSUN2", Convert.ToDecimal(item.VLSUN2)); // デフォルト値
+                    command.Parameters.AddWithValue("@VLSUN3", Convert.ToDecimal(item.VLSUN3)); // デフォルト値
+                    command.Parameters.AddWithValue("@QTLDTM", Convert.ToInt32(item.QTLDTM));
+                    command.Parameters.AddWithValue("@TXLTTM", string.IsNullOrEmpty(item.TXLTTM) ? (object)DBNull.Value : item.TXLTTM);
+                    command.Parameters.AddWithValue("@QTBUHJ", Convert.ToDecimal(item.QTBUHJ)); // デフォルト値
+                    command.Parameters.AddWithValue("@TXBUHJ", string.IsNullOrEmpty(item.TXBUHJ) ? (object)DBNull.Value : item.TXBUHJ);
+                    command.Parameters.AddWithValue("@QTTNJU", Convert.ToDecimal(item.QTTNJU)); // デフォルト値
+                    command.Parameters.AddWithValue("@CDDFSH", string.IsNullOrEmpty(item.CDDFSH) ? (object)DBNull.Value : item.CDDFSH);
+                    command.Parameters.AddWithValue("@CDMEKA", string.IsNullOrEmpty(item.CDMEKA) ? (object)DBNull.Value : item.CDMEKA);
+                    command.Parameters.AddWithValue("@CDDAIR", string.IsNullOrEmpty(item.CDDAIR) ? (object)DBNull.Value : item.CDDAIR);
+                    command.Parameters.AddWithValue("@TXMKAT", string.IsNullOrEmpty(item.TXMKAT) ? (object)DBNull.Value : item.TXMKAT);
+                    command.Parameters.AddWithValue("@TXMEKA", string.IsNullOrEmpty(item.TXMEKA) ? (object)DBNull.Value : item.TXMEKA);
+                    command.Parameters.AddWithValue("@TXBUHN", string.IsNullOrEmpty(item.TXBUHN) ? (object)DBNull.Value : item.TXBUHN);
+                    command.Parameters.AddWithValue("@TXB512", string.IsNullOrEmpty(item.TXB512) ? (object)DBNull.Value : item.TXB512);
+                    command.Parameters.AddWithValue("@CDSOKO", string.IsNullOrEmpty(item.CDSOKO) ? (object)DBNull.Value : item.CDSOKO);
+                    command.Parameters.AddWithValue("@KBHNKZ", string.IsNullOrEmpty(item.KBHNKZ) ? (object)DBNull.Value : item.KBHNKZ);
+                    command.Parameters.AddWithValue("@KBKEIG", string.IsNullOrEmpty(item.KBKEIG) ? (object)DBNull.Value : item.KBKEIG);
+                    command.Parameters.AddWithValue("@QTHCTN", Convert.ToDecimal(item.QTHCTN)); // デフォルト値
+                    command.Parameters.AddWithValue("@QTTZAI", Convert.ToDecimal(item.QTTZAI)); // デフォルト値
+                    command.Parameters.AddWithValue("@YMSIKO", Convert.ToInt32(item.YMSIKO));
+                    command.Parameters.AddWithValue("@QTHNEN", Convert.ToDecimal(item.QTHNEN)); // デフォルト値
+                    command.Parameters.AddWithValue("@RTKEPN", Convert.ToDecimal(item.RTKEPN)); // デフォルト値
+                    command.Parameters.AddWithValue("@CDSRIS", string.IsNullOrEmpty(item.CDSRIS) ? (object)DBNull.Value : item.CDSRIS);
+                    command.Parameters.AddWithValue("@VLSIZE", Convert.ToDecimal(item.VLSIZE));
+                    command.Parameters.AddWithValue("@CDDCKA", string.IsNullOrEmpty(item.CDDCKA) ? (object)DBNull.Value : item.CDDCKA);
+                    command.Parameters.AddWithValue("@CDDDKA", string.IsNullOrEmpty(item.CDDDKA) ? (object)DBNull.Value : item.CDDDKA);
+                    command.Parameters.AddWithValue("@CDICKA", string.IsNullOrEmpty(item.CDICKA) ? (object)DBNull.Value : item.CDICKA);
+                    command.Parameters.AddWithValue("@CDIDKA", string.IsNullOrEmpty(item.CDIDKA) ? (object)DBNull.Value : item.CDIDKA);
+                    command.Parameters.AddWithValue("@CDSCKA", string.IsNullOrEmpty(item.CDSCKA) ? (object)DBNull.Value : item.CDSCKA);
+                    command.Parameters.AddWithValue("@CDSDKA", string.IsNullOrEmpty(item.CDSDKA) ? (object)DBNull.Value : item.CDSDKA);
+                    command.Parameters.AddWithValue("@PRSANK", Convert.ToDecimal(item.PRSANK)); // デフォルト値
+                    command.Parameters.AddWithValue("@CDKASH", string.IsNullOrEmpty(item.CDKASH) ? (object)DBNull.Value : item.CDKASH);
+                    command.Parameters.AddWithValue("@ATKKOS", Convert.ToDecimal(item.ATKKOS)); // デフォルト値
+
+                    command.Parameters.AddWithValue("@CDHINM", item.CDHINM); // 条件用の品目コードを追加
+                    command.Transaction = this.transaction;
+                    command.ExecuteNonQuery(); // 更新を実行
+                }
+            }
+        }
+    
+        public class BaseRightHistoryHeader
+        {
+            // *********************************************************************************
+            // * BaseRight連携見出ファイルクラス
+            // *********************************************************************************
+            // Properties for BaseRight連携履歴見出ファイル
+            public int DeleteFlag { get; set; }
+            public string RegisteredUserCode { get; set; }
+            public long RegisteredDateTime { get; set; }
+            public string RegisteredProgramID { get; set; }
+            public string UpdatedUserCode { get; set; }
+            public long UpdatedDateTime { get; set; }
+            public string UpdatedProgramID { get; set; }
+            public string BaseRightNo { get; set; }       // NOBRRN
+            public string BaseRightCategory { get; set; } // KBBRRN
+            public long LinkedDate { get; set; }      // DTBRRN
+            public int Sequence { get; set; }              // NOSEQ
+            public string Status { get; set; }             // STRENK
+            public string Comment { get; set; }            // TXCOMT
+            public string SourceFilePath { get; set; }     // VLPTBF
+            public string DestinationFilePath { get; set; } // VLPTAF
+
+            // List of detail items (1:n relationship)
+            public List<BaseRightHistoryDetail> Details { get; set; } = new List<BaseRightHistoryDetail>();
+
+            // Method to insert header into the database
+            public void Insert(OdbcConnection connection)
+            {
+                string headerQuery = @"
+                                    INSERT INTO FHBRR (
+                                        FGDELE, 
+                                        SPIUSR, 
+                                        SPIDTM, 
+                                        SPIPGM, 
+                                        SPUUSR, 
+                                        SPUDTM, 
+                                        SPUPGM,
+                                        NOBRRN, 
+                                        KBBRRN, 
+                                        DTBRRN, 
+                                        NOSEQ, 
+                                        STRENK, 
+                                        TXCOMT, 
+                                        VLPTBF, 
+                                        VLPTAF
+                                    ) VALUES (
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ? ,
+                                        ?
+                                        )";
+                //
+                using (OdbcCommand command = new OdbcCommand(headerQuery, connection))
+                {
+                    command.Parameters.AddWithValue("@FGDELE", this.DeleteFlag);
+                    command.Parameters.AddWithValue("@SPIUSR", this.RegisteredUserCode);
+                    command.Parameters.AddWithValue("@SPIDTM", this.RegisteredDateTime);
+                    command.Parameters.AddWithValue("@SPIPGM", this.RegisteredProgramID);
+                    command.Parameters.AddWithValue("@SPUUSR", this.UpdatedUserCode);
+                    command.Parameters.AddWithValue("@SPUDTM", this.UpdatedDateTime);
+                    command.Parameters.AddWithValue("@SPUPGM", this.UpdatedProgramID);
+                    command.Parameters.AddWithValue("@NOBRRN", this.BaseRightNo);
+                    command.Parameters.AddWithValue("@KBBRRN", this.BaseRightCategory);
+                    command.Parameters.AddWithValue("@DTBRRN", this.LinkedDate);
+                    command.Parameters.AddWithValue("@NOSEQ", this.Sequence);
+                    command.Parameters.AddWithValue("@STRENK", this.Status);
+                    command.Parameters.AddWithValue("@TXCOMT", this.Comment);
+                    command.Parameters.AddWithValue("@VLPTBF", this.SourceFilePath);
+                    command.Parameters.AddWithValue("@VLPTAF", this.DestinationFilePath);
+
+                    // Execute the Insert command for header
+                    command.ExecuteNonQuery();
+
+                    // Insert details
+                    foreach (var detail in Details)
+                    {
+                        detail.Insert(connection, this.BaseRightNo); // Pass the parent key to the detail insert
+                    }
+                }
+            }
+        }
+
+        public class BaseRightHistoryDetail
+        {
+            // Properties for BaseRight連携履歴明細ファイル(品目)
+            public int DeleteFlag { get; set; }
+            public string RegisteredUserCode { get; set; }
+            public long RegisteredDateTime { get; set; }
+            public string RegisteredProgramID { get; set; }
+            public string UpdatedUserCode { get; set; }
+            public long UpdatedDateTime { get; set; }
+            public string UpdatedProgramID { get; set; }
+            public string BaseRightNo { get; set; }         // NOBRRN
+            public int ItemLineNo { get; set; }              // NPBRRH
+            public string DesignNo { get; set; }             // TXBR01
+            public string ChangeSymbol { get; set; }         // TXBR02
+            public string ItemNo { get; set; }               // TXBR03
+            public string StandardName_JP { get; set; }      // TXBR04
+            public string StandardName_EN { get; set; }      // TXBR05
+            public string UsageForbiddenCategory { get; set; } // TXBR06
+            public string ChangedItemNo { get; set; }        // TXBR07
+            public string ClassName { get; set; }            // TXBR08
+            public string ItemLinkCategory { get; set; }     // TXBR09
+            public string AssemblyCategory { get; set; }      // TXBR10
+            public string SpeciesCode { get; set; }          // TXBR11
+            public string MaterialCode { get; set; }         // TXBR12
+            public string Remarks { get; set; }               // TXBR13
+
+            // Method to insert detail into the database
+            public void Insert(OdbcConnection connection, string baseRightNo)
+            {
+                string detailQuery = @"
+                                    INSERT INTO FBBRH (
+                                        FGDELE, 
+                                        SPIUSR, 
+                                        SPIDTM, 
+                                        SPIPGM, 
+                                        SPUUSR, 
+                                        SPUDTM, 
+                                        SPUPGM,
+                                        NOBRRN, 
+                                        NPBRRH, 
+                                        TXBR01, 
+                                        TXBR02, 
+                                        TXBR03, 
+                                        TXBR04, 
+                                        TXBR05, 
+                                        TXBR06, 
+                                        TXBR07, 
+                                        TXBR08, 
+                                        TXBR09, 
+                                        TXBR10, 
+                                        TXBR11, 
+                                        TXBR12, 
+                                        TXBR13
+                                    ) VALUES (
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?, 
+                                        ?  
+                                    )";
+
+                using (OdbcCommand command = new OdbcCommand(detailQuery, connection))
+                {
+                    command.Parameters.AddWithValue("@FGDELE", this.DeleteFlag);
+                    command.Parameters.AddWithValue("@SPIUSR", this.RegisteredUserCode);
+                    command.Parameters.AddWithValue("@SPIDTM", this.RegisteredDateTime);
+                    command.Parameters.AddWithValue("@SPIPGM", this.RegisteredProgramID);
+                    command.Parameters.AddWithValue("@SPUUSR", this.UpdatedUserCode);
+                    command.Parameters.AddWithValue("@SPUDTM", this.UpdatedDateTime);
+                    command.Parameters.AddWithValue("@SPUPGM", this.UpdatedProgramID);
+                    command.Parameters.AddWithValue("@NOBRRN", this.BaseRightNo);
+                    command.Parameters.AddWithValue("@NPBRRH", this.ItemLineNo);
+                    command.Parameters.AddWithValue("@TXBR01", this.DesignNo);
+                    command.Parameters.AddWithValue("@TXBR02", this.ChangeSymbol);
+                    command.Parameters.AddWithValue("@TXBR03", this.ItemNo);
+                    command.Parameters.AddWithValue("@TXBR04", this.StandardName_JP);
+                    command.Parameters.AddWithValue("@TXBR05", this.StandardName_EN);
+                    command.Parameters.AddWithValue("@TXBR06", this.UsageForbiddenCategory);
+                    command.Parameters.AddWithValue("@TXBR07", this.ChangedItemNo);
+                    command.Parameters.AddWithValue("@TXBR08", this.ClassName);
+                    command.Parameters.AddWithValue("@TXBR09", this.ItemLinkCategory);
+                    command.Parameters.AddWithValue("@TXBR10", this.AssemblyCategory);
+                    command.Parameters.AddWithValue("@TXBR11", this.SpeciesCode);
+                    command.Parameters.AddWithValue("@TXBR12", this.MaterialCode);
+                    command.Parameters.AddWithValue("@TXBR13", this.Remarks);
+
+                    // Execute the Insert command for detail
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+        //
+        public static class IdNumbering
+        {
+            // *********************************************************************************
+            // * 採番クラス
+            // *********************************************************************************
+            public static int UpdateCMSABNV99(
+                string registrationUserID,
+                long integrationDateTime,
+                string registrationProgramId,
+                OdbcConnection connection)
+            {
+                // 引数が適切か確認
+                if (connection == null || string.IsNullOrWhiteSpace(registrationUserID) ||
+                    string.IsNullOrWhiteSpace(registrationProgramId))
+                {
+                    throw new ArgumentException("Invalid arguments provided.");
+                }
+
+                int updatedNoSeq; // 更新後のNOSEQ
+                string selectQuery = "SELECT NOSEQ FROM CMSABNV99 WHERE CMSKBT = 'NOBRRN' FOR UPDATE WITH RS";
+                string updateQuery = "UPDATE CMSABNV99 SET NOSEQ = ?, SPUUSR = ?, SPUDTM = ?, SPUPGM = ? WHERE CMSKBT = 'NOBRRN'";
+
+                using (var transaction = connection.BeginTransaction())
+                {
+                    try
+                    {
+                        // リードロックをかけてデータを取得
+                        using (var selectCommand = new OdbcCommand(selectQuery, connection, transaction))
+                        {
+                            // 取得したデータを読み込む
+                            using (var reader = selectCommand.ExecuteReader())
+                            {
+                                if (reader.Read())
+                                {
+                                    updatedNoSeq = reader.GetInt32(0) + 1; // NOSEQを1加算
+                                }
+                                else
+                                {
+                                    throw new InvalidOperationException("No record found with CMSKBT = 'NOBRRN'.");
+                                }
+                            }
+                        }
+
+                        // 更新処理
+                        using (var updateCommand = new OdbcCommand(updateQuery, connection, transaction))
+                        {
+                            updateCommand.Parameters.AddWithValue("?", updatedNoSeq);
+                            updateCommand.Parameters.AddWithValue("?", registrationUserID);
+                            updateCommand.Parameters.AddWithValue("?", integrationDateTime);
+                            updateCommand.Parameters.AddWithValue("?", registrationProgramId);
+
+                            int rowsAffected = updateCommand.ExecuteNonQuery();
+
+                            if (rowsAffected == 0)
+                            {
+                                throw new InvalidOperationException("No record was updated.");
+                            }
+                        }
+
+                        // コミット
+                        transaction.Commit();
+                    }
+                    catch (Exception)
+                    {
+                        // ロールバック
+                        transaction.Rollback();
+                        throw;
+                    }
+                }
+                return updatedNoSeq; // 更新後のNOSEQを戻り値として返す
+            }
+        }
+        private static string GetTrimmedString(string input, int maxBytes)
+        {
+            byte[] bytes = System.Text.Encoding.UTF8.GetBytes(input); // UTF-8でバイト配列に変換
+            if (bytes.Length <= maxBytes)
+            {
+                return input; // バイト数が256以下ならそのまま返す
+            }
+
+            // 256バイトに収めるために適切な文字数を探す
+            int byteCount = 0;
+            int charCount = 0;
+
+            while (byteCount < maxBytes && charCount < input.Length)
+            {
+                byteCount += System.Text.Encoding.UTF8.GetByteCount(input[charCount].ToString());
+                charCount++;
+            }
+
+            return input.Substring(0, charCount - 1); // 最後にオーバーした1文字を除外して返す
+        }
+    }
+}
