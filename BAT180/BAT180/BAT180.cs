@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data.Odbc;
 using System.Data.SqlClient;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -785,13 +786,14 @@ namespace BAT180
                                         {
                                             string[] columns = parser.ReadFields();
 
-                                            // 改行除去（必要なら）
-                                            for (int i = 0; i < columns.Length; i++)
-                                            {
-                                                columns[i] = columns[i]
-                                                    .Replace("\r", "")
-                                                    .Replace("\n", "");
-                                            }
+                                            //// 改行除去（必要なら）
+                                            //for (int i = 0; i < columns.Length; i++)
+                                            //{
+                                            //    columns[i] = columns[i]
+                                            //        .Replace("\r", "")
+                                            //        .Replace("\n", "");
+                                            //}
+
 
                                             // 最初に該当設計変更データの削除処理を実施する。
                                             rowCount++;
