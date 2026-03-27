@@ -597,8 +597,8 @@ namespace BAT180
                                                 item2.CDHINS = itemRecord.VarietyCode;                               // 品種コード
                                                 item2.NMHISJ = GetTrimmedString(itemRecord.ItemName, 66);            // 品種名に品目名をセット
                                                 item2.NMHISE = GetTrimmedString(itemRecord.ItemEnglishName, 66);     // 品種英名に品目英名をセット
-                                                item2.NMHISJ = string.Empty;
-                                                item2.NMHISE = string.Empty;
+                                                //item2.NMHISJ = string.Empty;
+                                                //item2.NMHISE = string.Empty;
                                                 item2.KBKMTT = itemRecord.AssemblyFlag;                             // 組立区分
                                                 item2.NOREVS = itemRecord.RevisionNumber;                           // 改訂番号
                                                 switch (itemRecord.ItemLinkageFlag)                                 // 使用不可区分
@@ -754,11 +754,11 @@ namespace BAT180
                                             itemStructure2.UpdatedUserCode = registrationUserID;                            // 更新担当者コード
                                             itemStructure2.UpdatedDateTime = Convert.ToDecimal(integrationDateTime);        // 更新日時
                                             itemStructure2.UpdatedProgramId = registrationProgramId;                        // 更新プログラムID
-
                                             itemStructure2.ParentItemCode = itemStructureRecord.parentItemNumber;           // 親品目コード
-                                            itemStructure2.BalloonNumber = itemStructureRecord.balloonNumber;               // 風船番号
                                             itemStructure2.ItemStructureLineNo = itemStructureRecord.ItemStructureLineNo;   // 品目構成行No
+                                            itemStructure2.DisplayLineNo = itemStructureRecord.ItemStructureLineNo;         // 表示行No
                                             itemStructure2.ChildItemCode = itemStructureRecord.childItemNumber;             // 子品目コード
+                                            itemStructure2.BalloonNumber = itemStructureRecord.balloonNumber;               // 風船番号
                                             itemStructure2.Quantity = itemStructureRecord.quantity;                         // 員数
                                             
                                             ItemMasterStructureRepository.InsertItemStructure(itemStructure2);
@@ -1039,12 +1039,12 @@ namespace BAT180
                             Comment = afterIntegrationComment_Item != null
                                       ? GetTrimmedString(afterIntegrationComment_Item, Math.Min(afterIntegrationComment_Item.Length, 256))
                                       : string.Empty,
-                            SourceFilePath = sourcePath_Item != null
-                                      ? GetTrimmedString(sourcePath_Item, Math.Min(sourcePath_Item.Length, 256))
+                            SourceFilePath = file != null
+                                      ? GetTrimmedString(file, Math.Min((file).Length, 256))
                                       : string.Empty,
                             DestinationFilePath = integrationErrorType_Item is true
-                                      ? GetTrimmedString(errorFolderPath_After_Item, Math.Min(errorFolderPath_After_Item.Length, 256))
-                                      : GetTrimmedString(successFolderPath_After_Item, Math.Min(successFolderPath_After_Item.Length, 256))
+                                      ? GetTrimmedString(errorTargetFolderItem, Math.Min(errorTargetFolderItem.Length, 256))
+                                      : GetTrimmedString(successTargetFolderItem, Math.Min(successTargetFolderItem.Length, 256))
                         };
                         bool isHeader = true;
                         long rowCount = 0;
@@ -1146,12 +1146,12 @@ namespace BAT180
                             Comment = afterIntegrationComment_ItemStructure != null
                                       ? GetTrimmedString(afterIntegrationComment_ItemStructure, Math.Min(afterIntegrationComment_ItemStructure.Length, 256))
                                       : string.Empty,
-                            SourceFilePath = sourcePath_ItemStructure != null
-                                      ? GetTrimmedString(sourcePath_ItemStructure, Math.Min(sourcePath_ItemStructure.Length, 256))
+                            SourceFilePath = file != null
+                                        ? GetTrimmedString(file, Math.Min((file).Length, 256))
                                       : string.Empty,
                             DestinationFilePath = integrationErrorType_ItemStructure is true
-                                      ? GetTrimmedString(errorFolderPath_After_ItemStructure, Math.Min(errorFolderPath_After_ItemStructure.Length, 256))
-                                      : GetTrimmedString(successFolderPath_After_ItemStructure, Math.Min(successFolderPath_After_ItemStructure.Length, 256))
+                                      ? GetTrimmedString(errorTargetFolderItemStructure, Math.Min(errorTargetFolderItemStructure.Length, 256))
+                                      : GetTrimmedString(successTargetFolderItemStructure, Math.Min(successTargetFolderItemStructure.Length, 256))
                         };
                         bool isHeader = true;
                         long rowCount = 0;
@@ -1230,12 +1230,12 @@ namespace BAT180
                             Comment = afterIntegrationComment_DesignChange != null
                                       ? GetTrimmedString(afterIntegrationComment_DesignChange, Math.Min(afterIntegrationComment_DesignChange.Length, 256))
                                       : string.Empty,
-                            SourceFilePath = sourcePath_DesignChange != null
-                                      ? GetTrimmedString(sourcePath_DesignChange, Math.Min(sourcePath_DesignChange.Length, 256))
+                            SourceFilePath = file != null
+                                      ? GetTrimmedString(file, Math.Min((file).Length, 256))
                                       : string.Empty,
                             DestinationFilePath = integrationErrorType_DesignChange is true
-                                      ? GetTrimmedString(errorFolderPath_After_DesignChange, Math.Min(errorFolderPath_After_DesignChange.Length, 256))
-                                      : GetTrimmedString(successFolderPath_After_DesignChange, Math.Min(successFolderPath_After_DesignChange.Length, 256))
+                                      ? GetTrimmedString(errorTargetFolderDesignChange, Math.Min(errorTargetFolderDesignChange.Length, 256))
+                                      : GetTrimmedString(successTargetFolderDesignChange, Math.Min(successTargetFolderDesignChange.Length, 256))
                         };
                         bool isHeader = true;
                         long rowCount = 0;
