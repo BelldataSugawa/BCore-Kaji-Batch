@@ -7,6 +7,7 @@ using System.Diagnostics.Eventing.Reader;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Remoting.Messaging;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -200,9 +201,16 @@ namespace BAT200
                     // *********************************************************************************
 
                     #region E-BOM連携ファイルバリデーションチェック
-                    var filesEBOM = Directory.GetFiles(targetFolderEBOM, "*.*", SearchOption.TopDirectoryOnly);
+                    var filesEBOM = Directory.GetFiles(targetFolderEBOM, "*.*", SearchOption.TopDirectoryOnly)
+                     .Where(f =>
+                               Path.GetFileName(f).Contains(filePrefix_EBOM) &&
+                               Path.GetFileName(f).Contains(strIraiNo)); 
                     Console.WriteLine($"ターゲットフォルダ: {targetFolderEBOM}");
-                    var allFiles = Directory.GetFiles(targetFolderEBOM, "*.*").ToList();
+                    var allFiles = Directory.GetFiles(targetFolderEBOM, "*.*")
+                    .Where(f =>
+                               Path.GetFileName(f).Contains(filePrefix_EBOM) &&
+                               Path.GetFileName(f).Contains(strIraiNo)).ToList();
+
                     Console.WriteLine($"フォルダ内のファイル数: {allFiles.Count}");
                     foreach (var file in allFiles)
                     {
@@ -223,26 +231,20 @@ namespace BAT200
                         Console.WriteLine("ファイルが見つかりませんでした。");
                     }
 
-                    foreach (var file in filesEBOM)
-                    {
-                        Console.WriteLine($"ファイルを読み込んでいます: {file}");
-                        //int lineCount = 0;
-                        //using (StreamReader reader = new StreamReader(file, Encoding.GetEncoding("Shift_JIS")))
-                        //{
-                        //    while (!reader.EndOfStream)
-                        //    {
-                        //        var line = reader.ReadLine();
-                        //        lineCount++;
-                        //        Console.WriteLine($"行 {lineCount}: {line}"); // 行の内容を出力
-                        //    }
-                        //}
-                    }
-
-
-
-
-
-
+                    //foreach (var file in filesEBOM)
+                    //{
+                    //    Console.WriteLine($"ファイルを読み込んでいます: {file}");
+                    //    //int lineCount = 0;
+                    //    //using (StreamReader reader = new StreamReader(file, Encoding.GetEncoding("Shift_JIS")))
+                    //    //{
+                    //    //    while (!reader.EndOfStream)
+                    //    //    {
+                    //    //        var line = reader.ReadLine();
+                    //    //        lineCount++;
+                    //    //        Console.WriteLine($"行 {lineCount}: {line}"); // 行の内容を出力
+                    //    //    }
+                    //    //}
+                    //}
 
                     //var filesEBOM = Directory.GetFiles(targetFolderEBOM, "*.*", SearchOption.TopDirectoryOnly)
                     filesEBOM.Where(f =>
@@ -291,7 +293,7 @@ namespace BAT200
                                 else
                                 {
                                     //Console.WriteLine("OK: " + string.Join(", ", line));
-                                    Console.WriteLine("OK");
+                                    Console.WriteLine($"{rowCount}行目:バリデーションエラーはありませんでした。");
                                 }
                             }
                         }
@@ -576,6 +578,7 @@ namespace BAT200
                                                         //　品目マスタ取得できない場合
                                                         integrationErrorType_EBOM = true;
                                                         afterIntegrationComment_EBOM += $"{rowCount}行目 品目マスタが抽出できませんでした {EBOMRecord.CodeNumber}";
+                                                        Console.WriteLine($"{rowCount}行目 品目マスタが抽出できませんでした {EBOMRecord.CodeNumber}");
                                                     }
                                                 }
                                             }
@@ -585,7 +588,7 @@ namespace BAT200
                                                 Console.WriteLine($"エラーです：実行予算見出しファイル:{EBOMRecord.CodeNumber} {EBOMRecord.CodeBranchNumber} が存在しません。");
                                                 // 実行予算見出しファイルの取得できない場合
                                                 integrationErrorType_EBOM = true;
-                                                afterIntegrationComment_EBOM += $"{rowCount}行目 実行予算見出しファイルが存在しません {EBOMRecord.CodeNumber} {EBOMRecord.CodeBranchNumber}";
+                                                afterIntegrationComment_EBOM += $" {rowCount}行目 実行予算見出しファイルが存在しません {EBOMRecord.CodeNumber} {EBOMRecord.CodeBranchNumber}";
                                             }
                                         }
                                         // 存在するファイル分だけループの終了位置
@@ -596,59 +599,66 @@ namespace BAT200
                                 // * 実行予算明細ファイル(E-BOM)の手配完了フラグの更新処理
                                 // *********************************************************************************
                                 #region 実行予算明細ファイル(E-BOM)の手配完了フラグの更新処理
-                                var ExecutionBudgetDetail2 = new ExecutionBudgetDetail(connection, transaction);
-                                foreach (var code in uniqueCodes.Codes)
+                                if (!integrationErrorType_EBOM)
                                 {
-                                    ExBudgetDetail ExBudgetDetail = new ExBudgetDetail();
-                                    ExBudgetDetail.UpdatedUserCode = registrationUserID;
-                                    ExBudgetDetail.UpdatedDateTime = Convert.ToDecimal(integrationDateTime);
-                                    ExBudgetDetail.UpdatedProgramID = registrationProgramId;
-                                    ExBudgetDetail.CodeNumber = code.CodeNumber;
-                                    ExBudgetDetail.BranchNumber = code.CodeBranchNumber;
-                                    ExBudgetDetail.Revision = code.Revision;
-                                    ExBudgetDetail.AssemblyDivision = code.AssemblyDivision;
-                                    ExecutionBudgetDetail2.Update(ExBudgetDetail);
+                                    var ExecutionBudgetDetail2 = new ExecutionBudgetDetail(connection, transaction);
+                                    foreach (var code in uniqueCodes.Codes)
+                                    {
+                                        ExBudgetDetail ExBudgetDetail = new ExBudgetDetail();
+                                        ExBudgetDetail.UpdatedUserCode = registrationUserID;
+                                        ExBudgetDetail.UpdatedDateTime = Convert.ToDecimal(integrationDateTime);
+                                        ExBudgetDetail.UpdatedProgramID = registrationProgramId;
+                                        ExBudgetDetail.CodeNumber = code.CodeNumber;
+                                        ExBudgetDetail.BranchNumber = code.CodeBranchNumber;
+                                        ExBudgetDetail.Revision = code.Revision;
+                                        ExBudgetDetail.AssemblyDivision = code.AssemblyDivision;
+                                        ExecutionBudgetDetail2.Update(ExBudgetDetail);
+                                    }
+                                    
                                 }
                                 #endregion
                                 // *********************************************************************************
                                 // * 表示順の見直し処理（構成展開実施）
                                 // *********************************************************************************
                                 #region 表示順の見直し処理（構成展開実施）
-                                var ExecutionBudgetDetail3 = new ExecutionBudgetDetail(connection, transaction);
-
-                                foreach ( var code in buildOutStructureKey.Codes)
+                                if (!integrationErrorType_EBOM)
                                 {
-                                    // *********************************************************************************
-                                    // * 退避エリアのキーの分だけ繰り返し
-                                    // *********************************************************************************
-                                    GetRootParentItemStructureUniqueID = ExecutionBudgetDetail3.GetRootParentItemStructureUniqueID(code.CodeNumber, code.CodeBranchNumber,code.Revision );
-                                    if (GetRootParentItemStructureUniqueID == null)
+                                    var ExecutionBudgetDetail3 = new ExecutionBudgetDetail(connection, transaction);
+
+                                    foreach (var code in buildOutStructureKey.Codes)
                                     {
-                                        Console.WriteLine($"コードNo:{code.CodeNumber} 枝番:{code.CodeBranchNumber} 実行予算リビジョン:{code.Revision}について、");
-                                        Console.WriteLine("実行予算明細ファイルに総親品目構成固有IDが存在しません。");
-                                        Console.WriteLine("表示行Noの見直しはされません。");
-                                    }
-                                    else
-                                    {
-                                        // 構成展開処理実施
-                                        decimal displayLineNo = 0;
-                                        var hierarchy = GetHierarchy(connection, transaction, GetRootParentItemStructureUniqueID);
-                                        // 結果を表示
-                                        foreach (var item in hierarchy)
+                                        // *********************************************************************************
+                                        // * 退避エリアのキーの分だけ繰り返し
+                                        // *********************************************************************************
+                                        GetRootParentItemStructureUniqueID = ExecutionBudgetDetail3.GetRootParentItemStructureUniqueID(code.CodeNumber, code.CodeBranchNumber, code.Revision);
+                                        if (GetRootParentItemStructureUniqueID == null)
                                         {
-                                            displayLineNo++;
-                                            Console.WriteLine($"親品目構成固有ID: {item.ParentID}, 品目構成固有ID: {item.ChildID}, レベル: {item.Level}");
-                                            ExBudgetDetail ExBudgetDetail = new ExBudgetDetail();
-                                            ExBudgetDetail.UpdatedUserCode = registrationUserID;
-                                            ExBudgetDetail.UpdatedDateTime = Convert.ToDecimal(integrationDateTime);
-                                            ExBudgetDetail.UpdatedProgramID = registrationProgramId;
-                                            ExBudgetDetail.CodeNumber = code.CodeNumber;
-                                            ExBudgetDetail.BranchNumber = code.CodeBranchNumber;
-                                            ExBudgetDetail.Revision = code.Revision;
-                                            ExBudgetDetail.ParentItemStructureUniqueID = item.ParentID;
-                                            ExBudgetDetail.ItemStructureUniqueID = item.ChildID;
-                                            ExBudgetDetail.DisplayLineNo = displayLineNo;
-                                            ExecutionBudgetDetail3.DiplaySEQUpdate(ExBudgetDetail);
+                                            Console.WriteLine($"コードNo:{code.CodeNumber} 枝番:{code.CodeBranchNumber} 実行予算リビジョン:{code.Revision}について、");
+                                            Console.WriteLine("実行予算明細ファイルに総親品目構成固有IDが存在しません。");
+                                            Console.WriteLine("表示行Noの見直しはされません。");
+                                        }
+                                        else
+                                        {
+                                            // 構成展開処理実施
+                                            decimal displayLineNo = 0;
+                                            var hierarchy = GetHierarchy(connection, transaction, GetRootParentItemStructureUniqueID);
+                                            // 結果を表示
+                                            foreach (var item in hierarchy)
+                                            {
+                                                displayLineNo++;
+                                                Console.WriteLine($"親品目構成固有ID: {item.ParentID}, 品目構成固有ID: {item.ChildID}, レベル: {item.Level}");
+                                                ExBudgetDetail ExBudgetDetail = new ExBudgetDetail();
+                                                ExBudgetDetail.UpdatedUserCode = registrationUserID;
+                                                ExBudgetDetail.UpdatedDateTime = Convert.ToDecimal(integrationDateTime);
+                                                ExBudgetDetail.UpdatedProgramID = registrationProgramId;
+                                                ExBudgetDetail.CodeNumber = code.CodeNumber;
+                                                ExBudgetDetail.BranchNumber = code.CodeBranchNumber;
+                                                ExBudgetDetail.Revision = code.Revision;
+                                                ExBudgetDetail.ParentItemStructureUniqueID = item.ParentID;
+                                                ExBudgetDetail.ItemStructureUniqueID = item.ChildID;
+                                                ExBudgetDetail.DisplayLineNo = displayLineNo;
+                                                ExecutionBudgetDetail3.DiplaySEQUpdate(ExBudgetDetail);
+                                            }
                                         }
                                     }
                                 }
@@ -716,12 +726,12 @@ namespace BAT200
                             Comment = afterIntegrationComment_EBOM != null
                                       ? GetTrimmedString(afterIntegrationComment_EBOM, Math.Min(Encoding.UTF8.GetByteCount(afterIntegrationComment_EBOM), 256))
                                       : string.Empty,                            
-                            SourceFilePath = sourcePath_EBOM != null
-                                      ? GetTrimmedString(sourcePath_EBOM, Math.Min(Encoding.UTF8.GetByteCount(sourcePath_EBOM), 256))
+                            SourceFilePath = file != null
+                                      ? GetTrimmedString(file, Math.Min(Encoding.UTF8.GetByteCount(file), 256))
                                       : string.Empty,
                             DestinationFilePath = integrationErrorType_EBOM is true
-                                      ? GetTrimmedString(errorFolderPath_After_EBOM, Math.Min(Encoding.UTF8.GetByteCount(errorFolderPath_After_EBOM), 256))
-                                      : GetTrimmedString(successFolderPath_After_EBOM, Math.Min(Encoding.UTF8.GetByteCount(successFolderPath_After_EBOM), 256))
+                                      ? GetTrimmedString(errorTargetFolderEBOM, Math.Min(Encoding.UTF8.GetByteCount(errorTargetFolderEBOM), 256))
+                                      : GetTrimmedString(successTargetFolderEBOM, Math.Min(Encoding.UTF8.GetByteCount(successTargetFolderEBOM), 256))
                         };
                         bool isHeader = true;
                         Decimal rowCount = 0;
@@ -986,7 +996,7 @@ namespace BAT200
 //                Console.WriteLine("プログラムが終了しました。");
 //#if DEBUG
 //                Console.WriteLine("画面を閉じるにはEnterを押下してください。");
-//                string RTN = Console.ReadLine();
+//                string re = Console.ReadLine();
 //#endif
 //            }
         }
@@ -1309,34 +1319,34 @@ namespace BAT200
                             exBudgetHead = new ExBudgetHead()
                             {
                                 DeleteFlag = reader.GetInt32(reader.GetOrdinal("FGDELE")),
-                                RegisteredUserCode = reader.GetString(reader.GetOrdinal("SPIUSR")),
+                                RegisteredUserCode = reader.IsDBNull(reader.GetOrdinal("SPIUSR")) ? string.Empty : reader.GetString(reader.GetOrdinal("SPIUSR")),
                                 RegisteredDateTime = reader.GetDecimal(reader.GetOrdinal("SPIDTM")),
-                                RegisteredProgramID = reader.GetString(reader.GetOrdinal("SPIPGM")),
-                                UpdatedUserCode = reader.GetString(reader.GetOrdinal("SPUUSR")),
+                                RegisteredProgramID = reader.IsDBNull(reader.GetOrdinal("SPIPGM")) ? string.Empty : reader.GetString(reader.GetOrdinal("SPIPGM")),
+                                UpdatedUserCode = reader.IsDBNull(reader.GetOrdinal("SPUUSR")) ? string.Empty : reader.GetString(reader.GetOrdinal("SPUUSR")),
                                 UpdatedDateTime = reader.GetDecimal(reader.GetOrdinal("SPUDTM")),
-                                UpdatedProgramID = reader.GetString(reader.GetOrdinal("SPUPGM")),
-                                CodeNumber = reader.GetString(reader.GetOrdinal("NOCODE")),
-                                BranchNumber = reader.GetString(reader.GetOrdinal("NOCDE1")),
+                                UpdatedProgramID = reader.IsDBNull(reader.GetOrdinal("SPUPGM")) ? string.Empty : reader.GetString(reader.GetOrdinal("SPUPGM")),
+                                CodeNumber = reader.IsDBNull(reader.GetOrdinal("NOCODE")) ? string.Empty : reader.GetString(reader.GetOrdinal("NOCODE")),
+                                BranchNumber = reader.IsDBNull(reader.GetOrdinal("NOCDE1")) ? string.Empty : reader.GetString(reader.GetOrdinal("NOCDE1")),
                                 Revision = reader.GetDecimal(reader.GetOrdinal("NOYSRV")),
-                                ManufacturingDivision = reader.GetString(reader.GetOrdinal("KBSEZO")),
-                                ProductClassificationCode = reader.GetString(reader.GetOrdinal("CDSEIB")),
+                                ManufacturingDivision = reader.IsDBNull(reader.GetOrdinal("KBSEZO")) ? string.Empty : reader.GetString(reader.GetOrdinal("KBSEZO")),
+                                ProductClassificationCode = reader.IsDBNull(reader.GetOrdinal("CDSEIB")) ? string.Empty : reader.GetString(reader.GetOrdinal("CDSEIB")),
                                 OrderTotalAmount = reader.GetDecimal(reader.GetOrdinal("ATJUGK")),
                                 ExecutionBudgetTotalAmount = reader.GetDecimal(reader.GetOrdinal("ATJYGK")),
                                 ForecastTotalAmount = reader.GetDecimal(reader.GetOrdinal("ATSYGK")),
                                 AchievementTotalAmount = reader.GetDecimal(reader.GetOrdinal("ATJSGK")),
-                                MidScheduleUserCode = reader.GetString(reader.GetOrdinal("CDCNTI")),
-                                DesignTaskNotes = reader.GetString(reader.GetOrdinal("TXBKO1")),
-                                AssemblyTaskNotes = reader.GetString(reader.GetOrdinal("TXBKO2")),
-                                InspectionTaskNotes = reader.GetString(reader.GetOrdinal("TXBKO3")),
-                                SpecialNotes = reader.GetString(reader.GetOrdinal("TXTOK1")),
+                                MidScheduleUserCode = reader.IsDBNull(reader.GetOrdinal("CDCNTI")) ? string.Empty : reader.GetString(reader.GetOrdinal("CDCNTI")),
+                                DesignTaskNotes = reader.IsDBNull(reader.GetOrdinal("TXBKO1")) ? string.Empty : reader.GetString(reader.GetOrdinal("TXBKO1")),
+                                AssemblyTaskNotes = reader.IsDBNull(reader.GetOrdinal("TXBKO2")) ? string.Empty : reader.GetString(reader.GetOrdinal("TXBKO2")),
+                                InspectionTaskNotes = reader.IsDBNull(reader.GetOrdinal("TXBKO3")) ? string.Empty : reader.GetString(reader.GetOrdinal("TXBKO3")),
+                                SpecialNotes = reader.IsDBNull(reader.GetOrdinal("TXTOK1")) ? string.Empty : reader.GetString(reader.GetOrdinal("TXTOK1")),
                                 ShipmentScheduledDate = reader.GetDecimal(reader.GetOrdinal("DTSYUK")),
                                 CompletionDate = reader.GetDecimal(reader.GetOrdinal("DTKANR")),
-                                CompletionStatus = reader.GetString(reader.GetOrdinal("KBSTKN")),
-                                OrderNo = reader.GetString(reader.GetOrdinal("NOJUCH")),
+                                CompletionStatus = reader.IsDBNull(reader.GetOrdinal("KBSTKN")) ? string.Empty : reader.GetString(reader.GetOrdinal("KBSTKN")),
+                                OrderNo = reader.IsDBNull(reader.GetOrdinal("NOJUCH")) ? string.Empty : reader.GetString(reader.GetOrdinal("NOJUCH")),
                                 OrderLineNo = reader.GetDecimal(reader.GetOrdinal("NPJUCH")),
-                                ExecutionBudgetApplicationStatus = reader.GetString(reader.GetOrdinal("STJSEI")),
-                                LatestFlag = reader.GetString(reader.GetOrdinal("FGNEW")),
-                                BRTransmissionCompletionStatus = reader.GetString(reader.GetOrdinal("KBBRKN")),
+                                ExecutionBudgetApplicationStatus = reader.IsDBNull(reader.GetOrdinal("STJSEI")) ? string.Empty : reader.GetString(reader.GetOrdinal("STJSEI")),
+                                LatestFlag = reader.IsDBNull(reader.GetOrdinal("FGNEW")) ? string.Empty : reader.GetString(reader.GetOrdinal("FGNEW")),
+                                BRTransmissionCompletionStatus = reader.IsDBNull(reader.GetOrdinal("KBBRKN")) ? string.Empty : reader.GetString(reader.GetOrdinal("KBBRKN")),
                             };
                             return exBudgetHead;
                         }
@@ -1482,7 +1492,7 @@ namespace BAT200
                 return maxBomLineNo;
             }
 
-            //同一コード番号、枝番、実行予算リビジョン内で、BOM行Noの最大値を取得するメソッド
+            //同一コード番号、枝番、実行予算リビジョン内で、ルートの親番号を取得するメソッド
             public String GetRootParentItemStructureUniqueID(string codeNumber, string branchNumber, decimal exeBudgNo)
             {
                 String RootParentItemStructureUniqueID = null;
